@@ -1,23 +1,29 @@
-import re
 from collections import defaultdict
 from dataclasses import dataclass
 
+from .context import BUSINESS, CODE, ENTITY_TYPES, IDENTITY, PERSON, domain_mentions, has, infer_domain, words
 from .taxonomy import DOMAINS, TYPES
 
-DIRECT = {"person_name", "saudi_national_id", "saudi_residency_id",
-          "phone_number", "email_address", "saudi_iban", "salary"}
-RESTRICTED = {"saudi_national_id", "saudi_residency_id", "saudi_iban", "salary"}
-FORMATS = DIRECT - {"person_name", "salary"} | {"date"}
-NUMERIC_ONLY = {"financial_amount", "transaction_amount", "payment_amount", "tax_amount",
-                "salary", "price", "count", "session_count", "duration_minutes"}
-LINKED_DOMAINS = {"customer", "workforce", "commerce", "finance", "support", "operations"}
+IDS = {"saudi_national_id", "saudi_residency_id"}
+DIRECT = IDS | {"phone_number", "email_address", "person_name", "saudi_iban"}
+FORMATS = DIRECT - {"person_name"} | {"date"}
+IDENTIFIERS = IDS | {"identifier", "business_identifier", "tracking_code", "policy_number",
+                     "reservation_code", "record_id", "reference_id", "service_code"}
+NUMERIC = {"financial_amount", "transaction_amount", "payment_amount", "tax_amount", "salary",
+           "price", "count", "session_count", "duration_minutes", "clinical_measurement"}
+FAMILIES = {
+    "column_name": "metadata", "semantic_similarity": "metadata", "sql_type": "metadata",
+    "local_detector": "value_pattern", "presidio": "value_pattern", "profiling": "value_pattern",
+    "table_context": "table_context", "primary_key": "relationship", "foreign_key": "relationship",
+    "format_validation": "validation", "named_entity": "named_entity",
+}
 
 
 @dataclass(frozen=True)
 class ReviewThresholds:
-    minimum_evidence: float = 0.46
-    minimum_confidence: float = 0.70
-    minimum_margin: float = 0.14
+    minimum_evidence: float = .46
+    minimum_confidence: float = .70
+    minimum_margin: float = .14
     minimum_sample: int = 5
 
     def __post_init__(self):
@@ -28,71 +34,25 @@ class ReviewThresholds:
             raise ValueError("Minimum sample size must be positive.")
 
 
-def words(name):
-    name = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", name)
-    return " ".join(re.findall(r"[^\W_]+", name.casefold()))
-
-
 def contains(text, phrase):
     return f" {phrase} " in f" {text} "
 
 
+ALIASES = {kind: {words(alias) for alias in item.aliases} for kind, item in TYPES.items()}
+
+
 def lexical_scores(name):
-    label = words(name)
-    return {kind: max(0.86 if alias == label else 0.62
-                      for alias in item.aliases if contains(label, alias))
-            for kind, item in TYPES.items() if kind != "unknown"
-            and any(contains(label, alias) for alias in item.aliases)}
+    text = words(name)
+    return {kind: .83 if text in aliases else .59 for kind, aliases in ALIASES.items()
+            if kind != "unknown" and any(contains(text, alias) for alias in aliases)}
 
 
-def domain_scores(text):
-    raw_tokens = words(text).split()
-    tokens = set(raw_tokens) | {token.removesuffix("s") for token in raw_tokens}
-    return {kind: min(1.0, 0.8 + 0.1 * (len(matching) - 1))
-            for kind, (_, _, aliases) in DOMAINS.items()
-            if (matching := tokens.intersection(aliases))}
-
-
-def predict_domain(name, semantic=None):
-    semantic = semantic or {}
-    lexical = domain_scores(name)
-    scores = {kind: lexical.get(kind, 0) + max(0, semantic.get(kind, 0) - 0.46) * 0.7
-              for kind in DOMAINS}
-    ranked = sorted(scores, key=scores.get, reverse=True)
-    first, second = ranked[:2]
-    return first if scores[first] >= 0.16 and scores[first] - scores[second] >= 0.035 else "unknown"
-
-
-def personal_status(kind, domain, target_domain=None, related_person=False):
-    if kind in DIRECT:
-        return "yes"
-    if kind == "unknown":
-        return "uncertain"
-    if kind == "reference_id":
-        if target_domain in LINKED_DOMAINS:
-            return "yes"
-        return "no" if target_domain == "catalog" else "uncertain"
-    if kind == "record_id":
-        return "uncertain" if domain != "catalog" else "no"
-    if related_person and kind in {
-        "city", "location", "service_region", "date", "customer_segment",
-        "boolean_flag", "job_title", "financial_amount", "transaction_amount", "payment_amount",
-        "tax_amount", "session_count", "duration_minutes", "device_category",
-    }:
-        return "yes"
-    if kind in {"free_text", "city", "location", "date", "financial_amount", "job_title"}:
-        return "uncertain" if domain != "catalog" else "no"
-    return "no"
-
-
-def sensitivity_for(kind, personal):
-    if kind in RESTRICTED:
-        return "restricted"
-    if personal == "yes":
-        return "confidential"
-    if personal == "uncertain":
-        return "undetermined"
-    return "internal"
+def table_domain(name, semantic):
+    mentions = domain_mentions(name)
+    scores = {domain: (.58 if domain in mentions else 0) + max(0, semantic.get(domain, 0) - .46) * .8
+              for domain in DOMAINS}
+    first, second = sorted(scores, key=scores.get, reverse=True)[:2]
+    return first if scores[first] >= .18 and scores[first] - scores[second] >= .04 else "unknown"
 
 
 def name_only_baseline(schema):
@@ -102,12 +62,38 @@ def name_only_baseline(schema):
             name = column["name"]
             scores = lexical_scores(name)
             kind = max(scores, key=scores.get, default="unknown")
-            domain = predict_domain(name)
-            personal = personal_status(kind, domain)
-            rows.append({"table_name": table["name"], "column_name": name,
-                         "semantic_type": kind, "data_domain": domain, "personal_data": personal,
+            domain = table_domain(name, {})
+            personal = ("yes" if kind in DIRECT | {"salary"} else
+                        "uncertain" if kind in {"unknown", "identifier", "location", "city", "date",
+                                                "record_id", "reference_id", "free_text", "job_title",
+                                                "financial_amount"} else "no")
+            rows.append({"table_name": table["name"], "column_name": name, "semantic_type": kind,
+                         "data_domain": domain, "personal_data": personal,
                          "review_required": kind == "unknown" or personal == "uncertain"})
     return rows
+
+
+def personal_status(kind, entity, linked, target_person, target_catalog, identity_shape, business):
+    if kind in DIRECT:
+        return "yes", "direct"
+    if kind == "reference_id":
+        return ("yes", "linked") if target_person else (
+            ("no", "none") if target_catalog else ("uncertain", "uncertain"))
+    if kind == "record_id":
+        return ("yes", "linked") if entity else (("uncertain", "uncertain") if linked else ("no", "none"))
+    if kind in {"unknown", "identifier", "free_text"}:
+        return "uncertain", "uncertain"
+    if kind in {"business_identifier", "tracking_code", "policy_number", "reservation_code", "service_code"}:
+        return ("uncertain", "uncertain") if identity_shape or linked else ("no", "none")
+    if kind == "salary":
+        return "yes", "linked"
+    if kind in {"clinical_measurement", "clinical_code", "academic_grade"}:
+        return ("yes", "linked") if linked else ("uncertain", "uncertain")
+    if linked and kind not in {"currency_code", "service_name", "payment_method", "sales_channel", "department", "price"}:
+        return ("uncertain", "uncertain") if business and not entity else ("yes", "linked")
+    if kind in {"city", "location", "date", "job_title", "financial_amount"} and not business:
+        return "uncertain", "uncertain"
+    return "no", "none"
 
 
 class HybridClassifier:
@@ -117,170 +103,220 @@ class HybridClassifier:
 
     def classify(self, schema, profiles):
         tables = schema["tables"]
-        rows = [(table, column) for table in tables for column in table["columns"]]
+        rows = [(table, col) for table in tables for col in table["columns"]]
         if not rows:
             return []
         names = [words(col["name"]) for _, col in rows]
-        contexts = []
-        for (table, column), name in zip(rows, names):
-            adjacent = [words(other["name"]) for other in table["columns"] if other is not column]
-            targets = [words(key["referred_table"]) for key in table["foreign_keys"]
-                       if column["name"] in key["constrained_columns"]]
-            contexts.append(f"{name}; {words(table['name'])}; {', '.join(adjacent[:12] + targets)}")
+        contexts = [f"{name}; {words(table['name'])}; " + ", ".join(
+            words(other["name"]) for other in table["columns"][:12] if other is not column)
+                    for (table, column), name in zip(rows, names)]
         descriptions = [words(table["name"]) + "; " + ", ".join(
             words(col["name"]) for col in table["columns"][:12]) for table in tables]
-        semantic_columns, semantic_domains = (
-            self.semantic.compare(names, contexts, descriptions) if self.semantic else
-            ([{} for _ in rows], [{} for _ in tables])
-        )
-        domains = {table["name"]: predict_domain(table["name"], scores)
-                   for table, scores in zip(tables, semantic_domains)}
-        return [self._classify_column(table, column, profiles[table["name"]][column["name"]],
-                                      domains, similarities)
-                for (table, column), similarities in zip(rows, semantic_columns)]
+        if self.semantic and hasattr(self.semantic, "compare_fields"):
+            sem, table_sem, field_sem = self.semantic.compare_fields(names, contexts, descriptions)
+        else:
+            sem, table_sem = (self.semantic.compare(names, contexts, descriptions)
+                              if self.semantic else ([{}] * len(rows), [{}] * len(tables)))
+            field_sem = [{}] * len(rows)
+        domains = {table["name"]: table_domain(table["name"], scores)
+                   for table, scores in zip(tables, table_sem)}
+        people = {}
+        for table in tables:
+            name = table["name"]
+            hints = set()
+            for col in table["columns"]:
+                profile = profiles[name][col["name"]]
+                hints.update(kind for kind in lexical_scores(col["name"]).keys() & ENTITY_TYPES - IDS
+                             if profile["local_detection"].get(kind, {}).get("structural", 0) >=
+                             .65 * max(1, profile["sample_count"]))
+            people[name] = (has(name, PERSON) or
+                            (domains[name] in {"customer", "workforce"} and not has(name, BUSINESS))
+                            or ("person_name" in hints and bool(hints - {"person_name"})))
+        return [self._column(table, col, profiles[table["name"]][col["name"]], similarities,
+                             field_domains, domains, people)
+                for (table, col), similarities, field_domains in zip(rows, sem, field_sem)]
 
-    def _classify_column(self, table, column, profile, domains, similarities):
+    def _column(self, table, column, profile, similarities, field_domains, domains, people):
         name, table_name = column["name"], table["name"]
-        domain = domains[table_name]
         sample = profile["sample_count"]
-        denominator = max(sample, 1)
+        denom = max(1, sample)
         indicators = profile["value_indicators"]
         detectors = profile["local_detection"]
-        presidio = profile.get("presidio_detection") or {}
+        ratios = {kind: hit["structural"] / denom for kind, hit in detectors.items()}
+        lexical = lexical_scores(name)
+        name_identity = has(name, IDENTITY) or bool(lexical.keys() & IDS)
+        business = has(name, BUSINESS) or (has(table_name, BUSINESS) and not people[table_name]
+                                          and not name_identity)
+        key_like = has(name, CODE)
+        primary = name in table["primary_key"]["constrained_columns"]
+        targets = [fk["referred_table"] for fk in table["foreign_keys"]
+                   if name in fk["constrained_columns"]]
+        target_domains = {domains.get(target, "unknown") for target in targets}
+        target_hint = next(iter(target_domains)) if len(target_domains) == 1 else None
+        linked = people[table_name] or any(people.get(fk["referred_table"], False) for fk in table["foreign_keys"])
+        strong_ids = {kind for kind in IDS if ratios.get(kind, 0) >= .45}
+        numeric = indicators["numeric"] / denom
         evidence = defaultdict(list)
 
         def add(kind, source, weight, detail):
-            evidence[kind].append({"source": source, "weight": round(weight, 4), "detail": detail})
+            evidence[kind].append({"source": source, "family": FAMILIES[source],
+                                   "weight": round(weight, 4), "detail": detail})
 
-        lexical = lexical_scores(name)
         for kind, weight in lexical.items():
-            add(kind, "column_name", weight * 0.78, "Column name matches a taxonomy alias.")
+            add(kind, "column_name", weight, "Normalized column metadata matches a taxonomy alias.")
         for kind, similarity in similarities.items():
-            if similarity >= 0.48:
-                add(kind, "semantic_similarity", min(0.40, (similarity - 0.44) * 0.72),
+            if similarity >= .51:
+                add(kind, "semantic_similarity", min(.47, (similarity - .46) * .87),
                     f"Multilingual metadata cosine similarity {similarity:.3f}.")
-        for kind, hits in detectors.items():
-            ratio = hits["structural"] / denominator
-            if ratio >= 0.15:
-                strength = 0.28 if kind == "person_name" else 1.1
-                if sample < self.thresholds.minimum_sample:
-                    strength *= 0.65
-                add(kind, "local_detector", ratio * strength,
-                    f"{hits['structural']} of {sample} sample values match the structure.")
-        for kind, hits in presidio.items():
-            if kind in TYPES and hits / denominator >= 0.15:
-                add(kind, "presidio", 0.23 * hits / denominator,
-                    f"Local Presidio recognizers matched {hits} of {sample} sample values.")
+        for kind, ratio in ratios.items():
+            if ratio < .15:
+                continue
+            hits = detectors[kind]
+            weight = (.51 if kind == "person_name" else .83 if kind in IDS else .94) * ratio
+            if kind in FORMATS and ratio < .55:
+                weight *= .5
+            if sample < self.thresholds.minimum_sample:
+                weight *= .65
+            add(kind, "local_detector", weight, f"Matching structure in {hits['structural']} of {sample} samples.")
+            if kind in FORMATS:
+                add(kind, "format_validation", 0, f"{hits['format_invalid']} format and "
+                    f"{hits['checksum_invalid']} checksum failures qualify the same value evidence.")
+        for kind, count in (profile.get("presidio_detection") or {}).items():
+            if kind in TYPES and count / denom >= .15:
+                add(kind, "presidio", 0, f"Presidio matched {count} samples using the same pattern family.")
+        for kind, count in (profile.get("independent_ner_detection") or {}).items():
+            if kind in TYPES and count / denom >= .5:
+                add(kind, "named_entity", .70 * count / denom, "Independent entity-model evidence.")
 
-        primary = name in table["primary_key"]["constrained_columns"]
-        targets = [key["referred_table"] for key in table["foreign_keys"]
-                   if name in key["constrained_columns"]]
-        target_domains = {domains.get(target, "unknown") for target in targets}
-        target_domain = sorted(target_domains & LINKED_DOMAINS)[0] if (
-            target_domains & LINKED_DOMAINS) else next(iter(sorted(target_domains)), None)
-        person_link = domain in {"customer", "workforce"} or any(
-            domains.get(key["referred_table"]) in LINKED_DOMAINS for key in table["foreign_keys"])
         if primary:
-            add("record_id", "primary_key", 1.24, "Column is part of the declared primary key.")
+            add("record_id", "primary_key", 1.28, "Column is part of the declared primary key.")
         if targets:
-            add("reference_id", "foreign_key", 1.22, "Column participates in a declared foreign key.")
+            add("reference_id", "foreign_key", 1.25, "Column participates in a declared foreign key.")
         sql_type = column["type"].upper()
-        numeric_ratio = indicators["numeric"] / denominator
         if sql_type.startswith(("DATE", "TIME")):
-            add("date", "sql_type", 0.8, "SQL type declares a date or time.")
+            add("date", "sql_type", .74, "Declared date or time storage.")
         if sql_type.startswith("BOOL"):
-            add("boolean_flag", "sql_type", 0.8, "SQL type declares a Boolean.")
+            add("boolean_flag", "sql_type", .74, "Declared boolean storage.")
         if sample >= 2 and indicators["binary"] == sample and profile["distinct_count"] <= 2:
-            add("boolean_flag", "profiling", 0.57, "Sample is binary with at most two full-column values.")
-        if indicators["currency"] / denominator >= 0.7:
-            add("currency_code", "profiling", 0.91, "Most sampled values match a known currency code.")
-        if (domain == "catalog" and indicators["code"] / denominator >= 0.75
-                and profile["uniqueness_ratio"] >= 0.85):
-            add("service_code", "profiling", 0.72, "Unique code-shaped values in a catalog context.")
-        if domain == "catalog" and contains(words(name), "name"):
-            add("service_name", "table_context", 0.72, "A catalog name field describes a service.")
-        if numeric_ratio >= 0.7:
-            for kind in NUMERIC_ONLY.intersection(lexical):
-                add(kind, "profiling", 0.21, "Most sampled values use numeric storage.")
-            if contains(words(name), "amount") and domain in {"commerce", "finance"}:
-                kind = "transaction_amount" if domain == "commerce" else "payment_amount"
-                add(kind, "table_context", 0.86, "Numeric amount in its transaction or payment domain.")
-        if contains(words(name), "status") and domain in {"commerce", "finance"}:
-            kind = "transaction_status" if domain == "commerce" else "payment_status"
-            add(kind, "table_context", 0.88, "Status field in its transaction or payment domain.")
-        if profile["uniqueness_ratio"] <= 0.5 and sample >= 5:
-            for kind in lexical:
-                if TYPES[kind].category in {"category", "status", "location"}:
-                    add(kind, "profiling", 0.10, "Repeated values support a categorical field.")
-
-        penalties = defaultdict(list)
-        strong_formats = {kind for kind in FORMATS
-                          if detectors.get(kind, {}).get("structural", 0) / denominator >= 0.60}
-        for kind in evidence:
-            if strong_formats and kind not in strong_formats and kind not in {"record_id", "reference_id"}:
-                penalties[kind].append(("value_conflict", 0.28, "A different type dominates sampled value structures."))
-            if sample >= 3 and kind in NUMERIC_ONLY and numeric_ratio < 0.4:
-                penalties[kind].append(("storage_conflict", 0.30, "Sample contains little numeric data."))
-            if sample >= 5 and kind in FORMATS and kind not in detectors:
-                penalties[kind].append(("format_conflict", 0.27, "Sample has no matches for the expected structure."))
-        scores = {kind: max(0.0, sum(item["weight"] for item in items)
-                            - sum(weight for _, weight, _ in penalties[kind]))
-                  for kind, items in evidence.items()}
-        ranked = sorted(scores, key=lambda kind: (-scores[kind], kind))
-        leader = ranked[0] if ranked else "unknown"
-        top = scores.get(leader, 0.0)
-        second = scores[ranked[1]] if len(ranked) > 1 else 0.0
-        margin = top - second
-        kind = leader if top >= self.thresholds.minimum_evidence else "unknown"
+            add("boolean_flag", "profiling", .76, "Sample is binary with at most two full-column values.")
+        if indicators["currency"] / denom >= .7:
+            add("currency_code", "profiling", .90, "Most sampled values match known currency codes.")
+        if numeric >= .7:
+            for kind in NUMERIC & lexical.keys():
+                add(kind, "profiling", .25, "Sample uses numeric storage.")
+            hint = domains[table_name]
+            if "financial_amount" in lexical and hint in {"commerce", "finance"}:
+                kind = "transaction_amount" if hint == "commerce" else "payment_amount"
+                add(kind, "table_context", .62, "Numeric amount in a commercial or financial table.")
+                add(kind, "column_name", .49, "Amount metadata supports a monetary interpretation.")
+                add(kind, "profiling", .25, "Sample uses numeric storage.")
+        if domains[table_name] == "catalog":
+            if has(name, {"name", "title", "label"}):
+                add("service_name", "table_context", .53, "Catalog context supports a service label.")
+                add("service_name", "column_name", .46, "Field metadata describes a label.")
+            if indicators["code"] / denom >= .75 and profile["uniqueness_ratio"] >= .85:
+                add("service_code", "profiling", .60, "Unique code-shaped values in a catalog.")
+                add("service_code", "table_context", .27, "Catalog context supports a service code.")
+        if strong_ids and not (primary or targets):
+            add("identifier", "profiling", .59, "Identifier shape does not identify the entity type.")
+            if business and (key_like or not name_identity):
+                add("business_identifier", "table_context", .62, "Business metadata supports an object reference.")
+                add("business_identifier", "profiling", .25, "Values use an identifier-like structure.")
 
         conflict = []
+        penalties = defaultdict(float)
+        for kind in evidence:
+            if kind in IDS and (business or not (name_identity or (people[table_name] and not key_like))):
+                penalties[kind] += .82
+            if kind in NUMERIC and sample >= 3 and numeric < .4:
+                penalties[kind] += .32
+            if kind in FORMATS and sample >= 5 and ratios.get(kind, 0) < .15:
+                penalties[kind] += .37
+            if kind not in IDENTIFIERS | FORMATS and any(ratios.get(k, 0) >= .65 for k in FORMATS):
+                penalties[kind] += .26
+        strength = {kind: {} for kind in evidence}
+        for kind, items in evidence.items():
+            for item in items:
+                family = item["family"]
+                strength[kind][family] = max(strength[kind].get(family, 0), item["weight"])
+        scores = {kind: max(0., sum(families.values()) - penalties[kind])
+                  for kind, families in strength.items()}
+        ranked = sorted(scores, key=lambda kind: (-scores[kind], kind))
+        leader = ranked[0] if ranked else "unknown"
+        top = scores.get(leader, 0.)
+        margin = top - (scores[ranked[1]] if len(ranked) > 1 else 0.)
+        kind = leader if top >= self.thresholds.minimum_evidence else "unknown"
+        if kind in FORMATS and 0 < ratios.get(kind, 0) < .55 and not (kind in IDS and name_identity):
+            kind = "unknown"
+        if kind not in {"unknown", "record_id", "reference_id"} and margin < .11 and len(ranked) > 1:
+            rival = ranked[1]
+            if kind in IDENTIFIERS and rival in IDENTIFIERS:
+                kind = "identifier"
+            elif TYPES[kind].category != TYPES[rival].category:
+                kind = "unknown"
+        if strong_ids and not (primary or targets) and (business or kind in {"identifier", "unknown"}):
+            conflict.append({"source": "identity_context", "candidate": sorted(strong_ids)[0],
+                             "detail": "Structure could identify a person or an object."})
         for candidate, weight in lexical.items():
-            if weight >= 0.62 and candidate != kind and (
-                (kind in strong_formats and TYPES[candidate].category != TYPES[kind].category)
+            if candidate != kind and weight >= .59 and (
+                (kind in FORMATS and ratios.get(kind, 0) >= .60 and TYPES[candidate].category != TYPES[kind].category)
                 or ((primary or targets) and candidate in DIRECT)
             ):
                 conflict.append({"source": "column_name", "candidate": candidate,
-                                 "detail": "Column name suggests a different type from stronger evidence."})
-        for candidate in sorted(strong_formats - {kind}):
-            conflict.append({"source": "local_detector", "candidate": candidate,
-                             "detail": "A competing structure also covers much of the sample."})
-        conflict.extend({"source": source, "candidate": leader, "detail": detail}
-                        for source, _, detail in penalties[leader])
+                                 "detail": "Field metadata conflicts with stronger evidence."})
+        if kind in IDS and not (primary or targets) and (business or penalties[kind] >= .82):
+            kind = "identifier"
 
-        personal = personal_status(kind, domain, target_domain, person_link)
-        if personal == "no" and (strong_formats & DIRECT or any(candidate in DIRECT for candidate in lexical)):
-            personal = "uncertain"
+        if penalties[kind] > 0 and kind != "unknown":
+            conflict.append({"source": "validation", "candidate": kind,
+                             "detail": "Sample evidence conflicts with the selected interpretation."})
+        neighbors = [hint for other in table["columns"] if other is not column
+                     for hint in sorted(domain_mentions(other["name"]))]
+        domain, resolution = infer_domain(name, kind, table_name, domains[table_name],
+                                          neighbors, field_domains, target_hint)
+        personal, linkage = personal_status(
+            kind, people[table_name], linked, any(people.get(t, False) for t in targets),
+            target_hint == "catalog", bool(strong_ids), business or domain == "catalog")
+        hits = detectors.get(kind, {})
+        seen = hits or (detectors[max(strong_ids, key=lambda k: (ratios[k], k))] if strong_ids else {})
         warnings = []
         if profile["null_percentage"]:
             warnings.append(f"{profile['null_percentage']:.1f}% of full-column records are null.")
-        hits = detectors.get(kind, {})
-        if hits.get("format_invalid"):
-            warnings.append(f"{hits['format_invalid']} sample values failed format validation.")
-        if hits.get("checksum_invalid"):
-            warnings.append(f"{hits['checksum_invalid']} sample values failed checksum validation.")
+        for term in ("format", "checksum"):
+            if seen.get(term + "_invalid"):
+                warnings.append(f"{seen[term + '_invalid']} sample values failed {term} validation.")
         if kind in FORMATS and hits.get("structural", 0) < sample:
-            warnings.append(f"{sample - hits.get('structural', 0)} sample values did not match the expected structure.")
+            warnings.append(f"{sample - hits.get('structural', 0)} samples did not match the selected format.")
         if kind in {"count", "session_count", "duration_minutes"} and indicators["negative"]:
             warnings.append(f"{indicators['negative']} sample values are negative.")
-        if kind in {"record_id", "saudi_national_id", "saudi_residency_id"} and profile["duplicate_count"]:
-            warnings.append("Full-column counts include duplicate non-null values.")
-        confidence = min(1.0, top * 0.78 + min(margin, 0.65) * 0.34)
-        review = (kind == "unknown" or confidence < self.thresholds.minimum_confidence
-                  or margin < self.thresholds.minimum_margin or sample < self.thresholds.minimum_sample
-                  or personal == "uncertain" or bool(conflict))
-        supporting = sorted(evidence.get(kind, []), key=lambda item: -item["weight"])
-        explanation = ("Insufficient combined evidence to select a semantic type."
-                       if kind == "unknown" else
-                       f"Selected {kind} from {', '.join(item['source'] for item in supporting)} evidence.")
+
+        independent = sum(weight >= .15 for weight in strength.get(kind, {}).values())
+        confidence = min(.96, .24 + .45 * min(top, 1.40) + .20 * min(margin, .55))
+        if independent < 2:
+            confidence = min(confidence, .82 if primary or targets else .76)
+        if kind in IDS and (not name_identity or hits.get("checksum_invalid", 0) > hits.get("checksum_valid", 0)):
+            confidence = min(confidence, .79)
         if conflict:
-            explanation += " Competing evidence requires review."
+            confidence = min(.74, confidence * .85)
+        if kind in {"unknown", "identifier"}:
+            confidence = min(confidence, .49)
+        review = (kind in {"unknown", "identifier"} or domain == "unknown" or personal == "uncertain"
+                  or confidence < self.thresholds.minimum_confidence or margin < self.thresholds.minimum_margin
+                  or sample < self.thresholds.minimum_sample or bool(conflict)
+                  or (kind in IDS and hits.get("checksum_invalid", 0) > hits.get("checksum_valid", 0)))
         return {
             "table_name": table_name, "column_name": name, "semantic_type": kind,
-            "data_domain": domain, "personal_data": personal,
-            "sensitivity": sensitivity_for(kind, personal),
-            "confidence": round(confidence, 4),
+            "semantic_category": "identifier" if kind in IDENTIFIERS else TYPES[kind].category,
+            "subtype_status": "uncertain" if kind in {"unknown", "identifier"} else "identified",
+            "data_domain": domain, "domain_resolution": resolution, "personal_data": personal,
+            "personal_linkage": linkage, "independent_evidence_families": independent,
+            "sensitivity": ("restricted" if kind in IDS | {"saudi_iban", "salary"} else
+                            {"yes": "confidential", "no": "internal", "uncertain": "undetermined"}[personal]),
+            "confidence": round(confidence, 4), "review_required": review,
             "alternative_candidates": [{"semantic_type": candidate, "evidence_score": round(scores[candidate], 4)}
-                                       for candidate in ranked if candidate != kind and scores[candidate] > 0.1][:3],
-            "supporting_evidence": supporting, "contradictory_evidence": conflict,
-            "explanation": explanation, "data_quality_warnings": warnings, "review_required": review,
+                                       for candidate in ranked if candidate != kind and scores[candidate] > .1][:3],
+            "supporting_evidence": sorted(evidence.get(kind, []), key=lambda item: -item["weight"]),
+            "contradictory_evidence": conflict, "data_quality_warnings": warnings,
+            "explanation": ("Evidence does not support a specific semantic type." if kind in {"unknown", "identifier"}
+                            else f"Selected {kind} with {independent} supporting evidence families."),
         }

@@ -96,6 +96,9 @@ def test_declared_reference_supplies_type_and_personal_context():
 
 def test_review_thresholds_are_configurable(independent_source):
     schema, profiles, _ = independent_source
+    schema = deepcopy(schema)
+    schema["tables"][0]["name"] = "staff_intake"
+    profiles = {"staff_intake": profiles["intake"]}
     def predict(threshold):
         classifier = HybridClassifier(thresholds=ReviewThresholds(minimum_confidence=threshold,
                                                                   minimum_margin=0))

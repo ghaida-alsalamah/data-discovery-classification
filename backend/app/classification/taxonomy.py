@@ -53,10 +53,24 @@ TYPES = {
     "session_count": entry("count", "number of user sessions", "عدد جلسات المستخدم", "sessions|session count|عدد الجلسات"),
     "duration_minutes": entry("duration", "elapsed time or duration in minutes", "المدة الزمنية بالدقائق", "minutes|duration|مدة|دقائق"),
     "free_text": entry("free_text", "unstructured written text such as notes or comments", "نص حر غير منظم مثل الملاحظات والتعليقات", "notes|comments|description|نص|ملاحظات"),
+    "identifier": entry("identifier", "entity identifier or unspecified reference", "معرف أو رقم مرجعي غير محدد", "identifier|code|reference|معرف|رمز|مرجع"),
+    "business_identifier": entry("identifier", "identifier for a non-person business object, batch or asset", "معرف لدفعة أو أصل أو منتج", "batch code|asset identifier|product identifier|batch reference|asset code|رمز الدفعة"),
+    "tracking_code": entry("identifier", "shipment parcel tracking reference", "رقم تتبع الشحنة", "tracking number|shipment code|tracking code|رقم التتبع"),
+    "policy_number": entry("identifier", "insurance contract policy reference", "رقم وثيقة التأمين", "policy number|policy id|رقم الوثيقة"),
+    "reservation_code": entry("identifier", "booking or reservation confirmation identifier", "رمز تأكيد الحجز", "booking code|reservation code|confirmation number|رمز الحجز"),
+    "clinical_code": entry("category", "code for a clinical observation or diagnostic condition", "رمز تشخيص أو ملاحظة طبية", "diagnosis code|clinical code|رمز التشخيص"),
+    "clinical_measurement": entry("measurement", "numeric observation of a clinical vital sign", "قياس عددي لعلامة حيوية طبية", "vital sign|temperature|blood pressure|درجة الحرارة"),
+    "academic_grade": entry("category", "assessment grade or academic attainment level", "نتيجة تقييم أو درجة أكاديمية", "academic grade|grade band|assessment grade|درجة التقييم"),
     "unknown": entry("unknown", "insufficient evidence for a semantic type", "أدلة غير كافية لتحديد النوع", "unknown|غير معروف"),
 }
 
 DOMAINS = {
+    "healthcare": ("clinical care patient encounter laboratory diagnosis", "الرعاية الصحية والمرضى والمختبر", ("healthcare", "patient", "clinical", "clinic", "encounter", "laboratory", "عيادة", "مريض", "مختبر")),
+    "education": ("teaching learning student curriculum and attendance", "التعليم والطلاب والمناهج والحضور", ("education", "student", "learner", "course", "attendance", "curriculum", "متعلم", "طالب", "دورة")),
+    "logistics": ("shipment routing delivery warehousing and transit", "الشحن والتوصيل والتخزين والنقل", ("logistics", "shipment", "parcel", "dispatch", "warehouse", "شحنة", "شحن")),
+    "insurance": ("policy underwriting claim and insurance coverage", "التأمين والوثائق والمطالبات والتغطية", ("insurance", "policy", "claim", "underwriting", "تأمين", "مطالبة", "وثيقة")),
+    "hospitality": ("guest lodging booking hotel stays and reservations", "الضيافة والضيوف والإقامة والحجوزات", ("hospitality", "guest", "booking", "stay", "hotel", "reservation", "ضيف", "نزيل", "حجز")),
+
     "customer": ("customer account client subscriber", "العملاء والمشتركون", ("customer", "client", "subscriber")),
     "workforce": ("employee staff personnel human resources", "الموظفون والموارد البشرية", ("employee", "staff", "personnel", "workforce")),
     "catalog": ("service product catalog and offerings", "دليل الخدمات والمنتجات", ("service", "product", "catalog")),

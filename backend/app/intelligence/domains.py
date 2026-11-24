@@ -3,6 +3,11 @@ from collections import Counter, defaultdict
 from backend.app.classification.taxonomy import DOMAINS
 
 PURPOSES = {
+    "healthcare": "Organize clinical observations and care-delivery data.",
+    "education": "Understand learning services and academic participation.",
+    "logistics": "Track shipments and operational coordination.",
+    "insurance": "Understand policy administration and claims activity.",
+    "hospitality": "Understand reservations and guest services.",
     "customer": "Understand customer coverage and service needs.",
     "workforce": "Understand staffing and support capacity.",
     "catalog": "Compare the service portfolio and pricing.",

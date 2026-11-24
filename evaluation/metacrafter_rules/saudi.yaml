@@ -1,0 +1,36 @@
+name: local-saudi-identifier-shapes
+description: Structural Saudi candidates using local validators
+context: pii
+lang: ar
+country_code: sa
+rules:
+  national_id:
+    key: local_sa_national
+    name: Saudi national identifier structural candidate
+    type: data
+    match: func
+    rule: evaluation.metacrafter_adapter.sa_national
+    minlen: 10
+    maxlen: 20
+    priority: 2
+    is_pii: true
+  residency_id:
+    key: local_sa_residency
+    name: Saudi residency identifier structural candidate
+    type: data
+    match: func
+    rule: evaluation.metacrafter_adapter.sa_residency
+    minlen: 10
+    maxlen: 20
+    priority: 2
+    is_pii: true
+  saudi_iban:
+    key: local_sa_iban
+    name: Saudi IBAN structural candidate
+    type: data
+    match: func
+    rule: evaluation.metacrafter_adapter.sa_iban
+    minlen: 24
+    maxlen: 34
+    priority: 2
+    is_pii: true

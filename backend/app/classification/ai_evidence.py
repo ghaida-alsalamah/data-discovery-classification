@@ -104,7 +104,13 @@ class SemanticEvidence:
                 scores[kind] = max(scores.get(kind, -1.0), float(score))
             yield scores
 
+    def compare_fields(self, column_names, contexts, table_contexts):
+        return self._compare(column_names, contexts, table_contexts, field_domains=True)
+
     def compare(self, column_names, contexts, table_contexts):
+        return self._compare(column_names, contexts, table_contexts)
+
+    def _compare(self, column_names, contexts, table_contexts, field_domains=False):
         vectors = self._encode([*column_names, *contexts, *table_contexts])
         split = len(column_names)
         names = self._similarities(self.semantic_index, vectors[:split])
@@ -112,4 +118,10 @@ class SemanticEvidence:
         columns = [{kind: 0.8 * named[kind] + 0.2 * nearby[kind] for kind in named}
                    for named, nearby in zip(names, context)]
         domains = list(self._similarities(self.domain_index, vectors[2 * split:]))
+        if field_domains:
+            domain_names = self._similarities(self.domain_index, vectors[:split])
+            domain_context = self._similarities(self.domain_index, vectors[split:2 * split])
+            fields = [{kind: 0.85 * a[kind] + 0.15 * b[kind] for kind in a}
+                      for a, b in zip(domain_names, domain_context)]
+            return columns, domains, fields
         return columns, domains
