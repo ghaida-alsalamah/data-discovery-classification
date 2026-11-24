@@ -7,8 +7,9 @@ from .quality import assess_quality
 
 
 def analyze(connection, schema, relationships, profiles, predictions, *, provider=None,
-            use_environment=True):
-    quality = assess_quality(connection, schema, relationships, profiles, predictions)
+            use_environment=True, relationship_checks=None):
+    quality = assess_quality(connection, schema, relationships, profiles, predictions,
+                             relationship_checks=relationship_checks)
     domains = build_domains(predictions, relationships, quality)
     engine = OpportunityEngine(schema, relationships, profiles, predictions, quality)
     opportunities = engine.deterministic_results()

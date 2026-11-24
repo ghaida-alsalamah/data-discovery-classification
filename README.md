@@ -50,3 +50,35 @@ receives opaque schema identifiers, aggregate counts, taxonomy labels and verifi
 links. Its structured proposals must pass local reference and prerequisite
 validation. Request failures or rejected responses leave deterministic results
 in place. The output records which method generated each result.
+
+## Elm Challenge 1 catalog
+
+The catalog is for data stewards and specialists exploring an authorized SQLite asset. Use the read-only scanner to export schema, relationship checks, field types and meanings, sensitivity, domains, quality findings, and potential uses.
+
+```powershell
+python -m scripts.scan_data_asset sample.sqlite data/catalog.json --owner "Data steward" --description "Customer service requests"
+python -m scripts.scan_data_asset sample.sqlite data/catalog_with_dictionary.json --dictionary descriptions.json
+python -m scripts.scan_data_asset sample.sqlite data/catalog_reviewed.json --dictionary descriptions.json --reviews reviews.json
+```
+
+Install the backend dependencies first. The enhanced scanner uses the existing MiniLM assets when present and falls back to lexical, profile and structural evidence otherwise. The owner and exported asset description are operator-supplied. Omit the owner when it is unknown. The data dictionary accepts descriptive text only and is optional. Use the source's exact table and field names. Descriptions provide evidence and can leave a field unresolved.
+
+```json
+{
+  "description": "Customer services and finance",
+  "tables": {
+    "requests": {
+      "description": "Service requests recorded by the contact centre",
+      "fields": {"q7": "Payment amount recorded for the completed request"}
+    }
+  }
+}
+```
+
+The catalog distinguishes direct PII from inferred person-linked data. Linking uses declared references to unique keys with complete source coverage and zero orphans. Empty and broken joins provide no affirmative linkage. Linked evidence names the relationships and can still require review. Domain explanations distinguish descriptions, semantic evidence, and verified references. The semantic path shows the category and supported subtype. Pending reviews identify fields requiring specialist attention.
+
+For corrections, supply an ordered JSON array. Each entry has `table`, `field`, `reviewer`, `reviewed_at` with a time zone, `reason`, and a `changes` object with any of `semantic_type`, `data_domain`, `personal_data`, and `sensitivity`. Export to a new file and retain the original report and correction file. The reviewed export records the old and new judgments while retaining the detector evidence. Use neutral reviewer identifiers and reasons without personal data. Regulatory decisions and final approval belong to the responsible specialist.
+
+Use synthetic or explicitly authorized sources. The scanner opens SQLite read-only, performs local inference, and exports structural and aggregate evidence. Keep source databases, dictionaries, catalogs and review files in the authorized workspace. For this evaluation, retain synthetic exports for at most 30 days unless a shorter organizational policy applies, then have the workspace owner remove the local copies. Keep any approved long-term review record separately under the owner's retention policy. The scanner does not perform automatic deletion.
+
+Run `pytest -q -s tests/test_elm_acceptance.py` for the fixed representative acceptance checks. Exact historical scores and their sealed artifacts remain pinned to the historical revision `431e34a`. Run the old sealed evaluation from that revision if you need to reproduce those hashes.

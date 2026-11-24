@@ -10,7 +10,43 @@ DIMENSIONS = ("completeness", "validity", "uniqueness", "consistency", "referent
 CHECKSUM_TYPES = {"saudi_national_id", "saudi_residency_id", "saudi_iban"}
 
 
-def assess_quality(connection, schema, relationships, profiles, predictions):
+def verify_relationships(connection, schema, relationships):
+    schema_tables = {table['name']: table for table in schema['tables']}
+    fields = {(table['name'], column['name']) for table in schema['tables'] for column in table['columns']}
+    metadata = MetaData()
+
+    def source(name):
+        return Table(name, metadata, autoload_with=connection, resolve_fks=False)
+
+    relationship_checks = {}
+    for edge in relationships["edges"]:
+        data = edge["data"]
+        origin, target = edge["source"], edge["target"]
+        source_names, target_names = data["source_columns"], data["target_columns"]
+        from_table, to_table = schema_tables.get(origin), schema_tables.get(target)
+        if (data["kind"] != "declared" or data.get("target_schema") not in (None, "main")
+                or not from_table or not to_table or not source_names
+                or len(source_names) != len(target_names)
+                or not all((origin, name) in fields for name in source_names)
+                or not all((target, name) in fields for name in target_names)):
+            relationship_checks[edge["id"]] = {"status": "not_evaluated"}
+            continue
+        child, parent = source(origin), source(target).alias()
+        child_columns = [child.c[name] for name in source_names]
+        eligible = and_(*(column.is_not(None) for column in child_columns))
+        # Parent on the left preserves its affinity and collation in SQLite comparisons.
+        joined = and_(*(parent.c[name] == column for name, column in zip(target_names, child_columns)))
+        exists = select(1).select_from(parent).where(joined).correlate(child).exists()
+        examined = connection.scalar(select(func.count()).select_from(child).where(eligible))
+        missing = connection.scalar(select(func.count()).select_from(child).where(eligible, ~exists))
+        relationship_checks[edge["id"]] = {
+            "status": "issue" if missing else "passed" if examined else "not_evaluated",
+            "examined_count": examined, "orphan_count": missing, "basis": "measured",
+        }
+    return relationship_checks
+
+
+def assess_quality(connection, schema, relationships, profiles, predictions, *, relationship_checks=None):
     schema_tables = {table["name"]: table for table in schema["tables"]}
     fields = {}
     issues = []
@@ -136,33 +172,14 @@ def assess_quality(connection, schema, relationships, profiles, predictions):
                   "Map labels to a maintained canonical vocabulary and verify any translations.",
                   {"variant_groups": variants["variant_groups"]})
 
-    relationship_checks = {}
+    if relationship_checks is None:
+        relationship_checks = verify_relationships(connection, schema, relationships)
     for edge in relationships["edges"]:
-        data = edge["data"]
-        origin, target = edge["source"], edge["target"]
-        source_names, target_names = data["source_columns"], data["target_columns"]
-        from_table, to_table = schema_tables.get(origin), schema_tables.get(target)
-        if (data["kind"] != "declared" or data.get("target_schema") not in (None, "main")
-                or not from_table or not to_table or not source_names
-                or len(source_names) != len(target_names)
-                or not all((origin, name) in fields for name in source_names)
-                or not all((target, name) in fields for name in target_names)):
-            relationship_checks[edge["id"]] = {"status": "not_evaluated"}
+        measured = relationship_checks[edge["id"]]
+        if "examined_count" not in measured:
             continue
-        child, parent = source(origin), source(target).alias()
-        child_columns = [child.c[name] for name in source_names]
-        eligible = and_(*(column.is_not(None) for column in child_columns))
-        # Parent on the left preserves its affinity and collation in SQLite comparisons.
-        joined = and_(*(parent.c[name] == column for name, column in zip(target_names, child_columns)))
-        exists = select(1).select_from(parent).where(joined).correlate(child).exists()
-        examined = connection.scalar(select(func.count()).select_from(child).where(eligible))
-        missing = connection.scalar(select(func.count()).select_from(child).where(eligible, ~exists))
-        relationship_checks[edge["id"]] = {
-            "status": "issue" if missing else "passed" if examined else "not_evaluated",
-            "examined_count": examined, "orphan_count": missing, "basis": "measured",
-        }
-        check_group([(origin, name) for name in source_names], "referential_integrity",
-                    "missing_referenced_records", missing, examined, "measured",
+        check_group([(edge["source"], name) for name in edge["data"]["source_columns"]], "referential_integrity",
+                    "missing_referenced_records", measured["orphan_count"], measured["examined_count"], "measured",
                     "Complete foreign key values have no matching parent record.",
                     "Joins may omit records and bias cross-domain reporting.",
                     "Restore missing parent records or correct the references.",

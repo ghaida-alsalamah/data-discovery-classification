@@ -57,9 +57,23 @@ def build_domains(predictions, relationships, quality):
     for domain, fields in sorted(grouped.items()):
         tables = defaultdict(list)
         for field in fields:
+            resolution = field.get("domain_resolution", "uncertain")
+            membership = {
+                "field_description": "The field description names this domain.",
+                "table_description": "The table description provides a single domain candidate.",
+                "database_description": "The database description provides a single domain candidate.",
+                "semantic_type": "The detected semantic type is associated with this domain.",
+                "verified_reference": "The field references a verified key assigned to this domain.",
+                "specialist_review": "A specialist assigned this field to the domain.",
+                "conflicting_domain_evidence": "Domain evidence conflicts and requires review.",
+                "field_semantics_or_metadata": "Field semantics or schema metadata support this domain.",
+                "table_and_neighbors": "The table and neighboring fields support this domain.",
+            }
             tables[field["table_name"]].append({
                 "column_name": field["column_name"], "semantic_type": field["semantic_type"],
-                "membership_reason": f"Classified into {domain} with semantic type {field['semantic_type']}.",
+                "membership_reason": (membership.get(resolution, "Available evidence leaves the domain unresolved.")
+                                      if "classification_resolution" in field
+                                      else f"Classified into {domain} with semantic type {field['semantic_type']}."),
                 "classification_evidence_sources": sorted(
                     {item["source"] for item in field.get("supporting_evidence", [])}),
             })
@@ -69,7 +83,9 @@ def build_domains(predictions, relationships, quality):
                             else "Fields whose business domain needs confirmation."),
             "purpose_and_business_value": PURPOSES.get(domain, "Resolve classification before use."),
             "included_tables": [{"table_name": table, "columns": columns} for table, columns in tables.items()],
-            "boundaries": "Membership applies to listed fields. Declared links connect domains without assigning membership.",
+            "boundaries": ("Membership applies to the listed fields. A verified reference can support its own field's domain."
+                           if any("classification_resolution" in field for field in fields)
+                           else "Membership applies to listed fields. Declared links connect domains without assigning membership."),
             "relationships": links[domain],
             "personal_data_counts": dict(Counter(field["personal_data"] for field in fields)),
             "sensitivity_counts": dict(Counter(field["sensitivity"] for field in fields)),
