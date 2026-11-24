@@ -1,5 +1,6 @@
 """Fetch pinned pretrained assets for the local SQLite scanner."""
 import argparse
+import hashlib
 import os
 from pathlib import Path
 import shutil
@@ -13,6 +14,14 @@ DEPS = Path(".deps")
 DODUO_COMMIT = "f3ae5aace5d8364065a3cc3b74ce6cde2c928679"
 DODUO_MEMBER = "model/sato0_mosato_bert_bert-base-uncased-bs16-ml-32__sato0-1.00_best_micro_f1.pt"
 DODUO_SIZE = 438258249
+DODUO_SHA256 = "b7180f8a10df2479a442b7df54a96a2e75fed0bab629db85af730b9c92719ddc"
+
+
+def verified(path):
+    if not path.is_file() or path.stat().st_size != DODUO_SIZE:
+        return False
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest() == DODUO_SHA256
 
 
 def install_pii():
@@ -39,7 +48,7 @@ def install_doduo():
     snapshot_download("google-bert/bert-base-uncased", revision="86b5e0934494bd15c9632b12f734a8a67f723594",
                       local_dir=ROOT / "bert-tokenizer", allow_patterns=["config.json", "vocab.txt", "LICENSE"])
     target = ROOT / "doduo/viznet.pt"
-    if target.is_file() and target.stat().st_size == DODUO_SIZE:
+    if verified(target):
         return
     target.parent.mkdir(parents=True, exist_ok=True)
     staging = target.with_suffix(".part")
@@ -52,8 +61,8 @@ def install_doduo():
                     break
             else:
                 raise RuntimeError("The official archive did not contain the expected VizNet checkpoint.")
-    if staging.stat().st_size != DODUO_SIZE:
-        raise RuntimeError("VizNet checkpoint is incomplete.")
+    if not verified(staging):
+        raise RuntimeError("VizNet checkpoint failed checksum verification.")
     os.replace(staging, target)
 
 

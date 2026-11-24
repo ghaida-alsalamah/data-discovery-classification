@@ -7,11 +7,31 @@ python -m pip install -r backend/requirements.txt "huggingface-hub==0.36.2"
 python -m scripts.install_upstream_models pii
 python -m scripts.install_upstream_models doduo
 python -m scripts.scan_data_asset synthetic.sqlite result.json --engine pii
+$env:PYTHONPATH = (Resolve-Path .deps/upstream-neural-v2).Path
 ```
 
 Use `--engine current` for the current engine, `doduo` for its native semantic predictions and the current engine’s production decisions, or `upstream` to run both pretrained models. Each scanner runs discovery, profiling, field classification, domain grouping, quality checks, and opportunity analysis over a read-only SQLite connection. Each result contains model labels and aggregate evidence. Dataset and schema names appear explicitly, so name assets appropriately before distributing reports.
 
 For OpenMetadata’s optional comparator, install `openmetadata-ingestion==2.1.1.0` and its classifier dependencies into `.deps/upstream-om` and install its English spaCy model before the scan. The comparator imports the released classifier and emits two views of its native results, raw label scores and direct-identifier labels meeting the fixed threshold. See the [OpenMetadata ingestion license](https://github.com/open-metadata/OpenMetadata/blob/main/ingestion/LICENSE).
+
+The standalone benchmark loaded the released PII modules without starting OpenMetadata's unrelated catalog profiler registry. With the isolated dependency folder populated, this reproduces that import and runs the same comparison runner.
+
+```python
+import sys
+import types
+from pathlib import Path
+
+dependencies = Path(".deps/upstream-om").resolve()
+sys.path.append(str(dependencies))
+metadata = types.ModuleType("metadata")
+metadata.__path__ = [str(dependencies / "metadata")]
+sys.modules["metadata"] = metadata
+
+from evaluation.upstream_compare import run
+
+holdout = Path("data/upstream/fresh/databases")
+run("openmetadata", sorted(holdout.glob("*.sqlite")), Path("data/upstream/final/openmetadata"))
+```
 
 ## Benchmark
 
