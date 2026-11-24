@@ -2,3 +2,7 @@ SQLAlchemy==2.0.41
 pandas==2.3.1
 Faker==37.4.0
 pytest==8.4.1
+presidio-analyzer==2.2.360
+onnxruntime==1.23.2
+tokenizers==0.22.2
+numpy==2.2.6

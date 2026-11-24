@@ -17,10 +17,11 @@ def generate_database(path: Path, truth_path: Path, seed: int = 42):
     truth = {}
 
     def field(name, semantic, sql_type=String, personal=False, sensitivity="internal",
-              issues=(), **kwargs):
+              issues=(), name_quality="clear", **kwargs):
         return (Column(name, sql_type, **kwargs), {
             "semantic_type": semantic, "personal_data": personal,
             "sensitivity": sensitivity, "quality_issues": list(issues),
+            "column_name_quality": name_quality,
         })
 
     def key():
@@ -37,11 +38,11 @@ def generate_database(path: Path, truth_path: Path, seed: int = 42):
 
     customers = table("customers", "customer", key(),
         field("full_name", "person_name", personal=True, issues=("duplicate",)),
-        field("f01", "saudi_national_id", personal=True, sensitivity="restricted",
+        field("f01", "saudi_national_id", personal=True, sensitivity="restricted", name_quality="ambiguous",
               issues=("missing", "invalid_checksum"), unique=True),
-        field("x2", "saudi_residency_id", personal=True, sensitivity="restricted",
+        field("x2", "saudi_residency_id", personal=True, sensitivity="restricted", name_quality="ambiguous",
               issues=("missing", "invalid_checksum"), unique=True),
-        field("attr_03", "phone_number", personal=True,
+        field("attr_03", "phone_number", personal=True, name_quality="ambiguous",
               issues=("invalid_format", "unassigned_prefix")),
         field("email", "email_address", personal=True, issues=("missing",), unique=True),
         field("city", "city", personal=True, issues=("inconsistent_representation",)),
@@ -57,7 +58,7 @@ def generate_database(path: Path, truth_path: Path, seed: int = 42):
         field("hire_date", "date", personal=True),
         field("office", "city"))
     services = table("services", "catalog", key(),
-        field("ref_code", "service_code", unique=True),
+        field("ref_code", "service_code", unique=True, name_quality="ambiguous"),
         field("name_ar", "service_name"),
         field("name_en", "service_name"),
         field("category", "service_category"),
@@ -71,7 +72,7 @@ def generate_database(path: Path, truth_path: Path, seed: int = 42):
         field("tax_sar", "tax_amount", Float, True, "confidential"),
         field("channel", "sales_channel"), field("status", "transaction_status"))
     payments = table("payments", "finance", key(), fk("transaction_id", "transactions", True),
-        field("region_code", "saudi_iban", personal=True, sensitivity="restricted",
+        field("region_code", "saudi_iban", personal=True, sensitivity="restricted", name_quality="misleading",
               issues=("missing", "invalid_format", "invalid_checksum")),
         field("amount_sar", "payment_amount", Float, True, "confidential"),
         field("currency", "currency_code"), field("method", "payment_method"),

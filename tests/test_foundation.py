@@ -15,7 +15,7 @@ from scripts.run_pipeline import run
 @pytest.fixture(scope="module")
 def artifacts(tmp_path_factory):
     directory = tmp_path_factory.mktemp("pipeline")
-    run(directory)
+    run(directory, phase_one_only=True)
     return directory
 
 
@@ -105,8 +105,11 @@ def test_profiles_counts_sampling_and_numeric_statistics():
     assert result["duplicate_count"] == 1
     assert result["uniqueness_ratio"] == .75
     assert result["sample_count"] == 3
-    assert result["numeric_statistics"]["mean"] == pytest.approx(50 / 3)
-    assert result["min_length"] == result["max_length"] == result["average_length"] == 2
+    assert result["numeric_statistics"]["mean"] == pytest.approx(15)
+    assert result["min_length"] == 2
+    assert result["max_length"] == 5
+    assert result["average_length"] == 3
+    assert result["sampling_method"] == "stratified_non_null_rank"
     assert mixed["text_indicators"]["english_values"] == 1
     assert mixed["numeric_statistics"]["count"] == 3
 
