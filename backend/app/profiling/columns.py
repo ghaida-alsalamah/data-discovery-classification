@@ -1,6 +1,7 @@
 import math
 import re
-from collections import Counter
+import unicodedata
+from collections import Counter, defaultdict
 from datetime import date, datetime
 from decimal import Decimal
 from numbers import Real
@@ -107,6 +108,19 @@ def value_indicators(values, strings):
     }
 
 
+def normalization_indicators(values):
+    groups = defaultdict(Counter)
+    text_count = 0
+    for value in values:
+        if isinstance(value, str):
+            text_count += 1
+            normalized = " ".join(unicodedata.normalize("NFKC", value).casefold().split())
+            groups[normalized][value] += 1
+    variants = [counts for counts in groups.values() if len(counts) > 1]
+    return {"text_count": text_count, "variant_groups": len(variants),
+            "affected_count": sum(sum(counts.values()) - max(counts.values()) for counts in variants)}
+
+
 def profile_column(connection, table, column, sample_size=500, presidio=None):
     if type(sample_size) is not int or sample_size < 1:
         raise ValueError("sample_size must be a positive integer")
@@ -152,10 +166,11 @@ def profile_column(connection, table, column, sample_size=500, presidio=None):
                             "uniqueness_ratio", "duplicate_count"],
             "sample": ["min_length", "max_length", "average_length", "numeric_statistics", "patterns",
                        "character_composition", "text_indicators", "date_formats", "value_indicators",
-                       "local_detection", "presidio_detection"],
+                       "local_detection", "presidio_detection", "normalization"],
         },
         "value_indicators": value_indicators(values, strings),
         "local_detection": local_detection,
+        "normalization": normalization_indicators(values),
         "presidio_detection": presidio.summarize(values) if presidio is not None else None,
         "min_length": min(lengths, default=None),
         "max_length": max(lengths, default=None),

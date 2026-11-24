@@ -6,3 +6,5 @@ presidio-analyzer==2.2.360
 onnxruntime==1.23.2
 tokenizers==0.22.2
 numpy==2.2.6
+httpx==0.28.1
+pydantic>=2,<3

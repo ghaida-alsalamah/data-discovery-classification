@@ -10,6 +10,7 @@ from backend.app.classification.ai_evidence import (
 from backend.app.classification.engine import HybridClassifier, ReviewThresholds
 from backend.app.connectors.sqlite import InformationAsset, SQLiteConnector
 from backend.app.discovery.schema import discover
+from backend.app.intelligence.service import analyze
 from backend.app.models.synthetic import generate_database
 from backend.app.profiling.columns import profile_database
 
@@ -20,7 +21,7 @@ def write_json(path, payload):
 
 
 def run(output_dir: Path, sample_size=500, *, phase_one_only=False,
-        model_path=DEFAULT_MODEL_PATH, thresholds=None):
+        model_path=DEFAULT_MODEL_PATH, thresholds=None, use_llm=True):
     started = perf_counter()
     presidio = None if phase_one_only else PresidioEvidence()
     semantic = SemanticEvidence(model_path) if not phase_one_only and model_path is not None else None
@@ -34,11 +35,18 @@ def run(output_dir: Path, sample_size=500, *, phase_one_only=False,
         schema, relationships = discover(connection)
         profiles = profile_database(connection, schema, sample_size, presidio)
         schema["asset"] = asdict(asset)
-    profiled = perf_counter()
+        profiled = perf_counter()
+        if not phase_one_only:
+            predictions = classifier.classify(schema, profiles)
+            classified = perf_counter()
+            domains, quality, opportunities = analyze(
+                connection, schema, relationships, profiles, predictions, use_environment=use_llm,
+            )
 
     if not phase_one_only:
-        predictions = classifier.classify(schema, profiles)
-        classified = perf_counter()
+        write_json(output_dir / "domains.json", domains)
+        write_json(output_dir / "quality_report.json", quality)
+        write_json(output_dir / "opportunities.json", opportunities)
         write_json(output_dir / "classifications.json", {
             "components": {"presidio": True, "semantic_model": MODEL_ID if semantic else None,
                            "semantic_runtime": "onnxruntime_cpu" if semantic else None},
@@ -62,6 +70,7 @@ def main():
     parser.add_argument("--sample-size", type=int, default=500)
     parser.add_argument("--model-path", type=Path, default=DEFAULT_MODEL_PATH, help="Local MiniLM model directory")
     parser.add_argument("--without-embeddings", action="store_true", help="Explicitly disable embedding evidence")
+    parser.add_argument("--offline", action="store_true", help="Disable remote LLM reasoning")
     parser.add_argument("--review-confidence", type=float, default=0.70)
     parser.add_argument("--review-margin", type=float, default=0.14)
     args = parser.parse_args()
@@ -73,7 +82,8 @@ def main():
     except ValueError as error:
         parser.error(str(error))
     run(args.output_dir, args.sample_size,
-        model_path=None if args.without_embeddings else args.model_path, thresholds=thresholds)
+        model_path=None if args.without_embeddings else args.model_path, thresholds=thresholds,
+        use_llm=not args.offline)
 
 
 if __name__ == "__main__":
