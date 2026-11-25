@@ -55,12 +55,16 @@ def build_domains(predictions, relationships, quality):
 
     result = []
     for domain, fields in sorted(grouped.items()):
-        emerging = any(field.get("domain_resolution") == "emerging_table_purpose" for field in fields)
+        emerging = any(field.get("domain_resolution") in {"emerging_table_purpose", "discovered_table_subject", "verified_relationship_group"} for field in fields)
         subject = domain.replace("_", " ")
         tables = defaultdict(list)
         for field in fields:
             resolution = field.get("domain_resolution", "uncertain")
             membership = {
+                "table_subject": "The table subject identifies this business group.",
+                "discovered_table_subject": "The group reflects the table subject and shared schema terms.",
+                "verified_relationship_group": "Verified references support a shared group for this relationship table.",
+                "field_context": "Several fields in the table corroborate this business context.",
                 "table_purpose": "The table purpose and surrounding fields support this business domain.",
                 "emerging_table_purpose": "The subject and function in the table metadata suggest an emerging domain.",
                 "field_description": "The field description names this domain.",

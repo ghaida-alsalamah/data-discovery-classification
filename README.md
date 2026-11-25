@@ -85,13 +85,17 @@ Run `pytest -q -s tests/test_elm_acceptance.py` for the fixed representative acc
 
 ### English scanner comparison
 
-The default scanner uses English metadata normalization and local content summaries. The previous scanner is available with `--engine enhanced`. The existing MiniLM weights are optional for scanning. Install the pinned assets above before reproducing this comparison. Inferred domains outside the fixed list are marked for review. The catalog exports privacy roles and path evidence while keeping source values local.
+The archived `--engine english` scanner uses English metadata normalization and local content summaries. The previous scanner is available with `--engine enhanced`. The existing MiniLM weights are optional for scanning. Install the pinned assets above before reproducing this comparison. Inferred domains outside the fixed list are marked for review. The catalog exports privacy roles and path evidence while keeping source values local.
 
 ```powershell
 python -m evaluation.english_fixture
 python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/before.json --engine enhanced
-python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/after.json
+python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/after.json --engine english
 python -m evaluation.english_score
 ```
 
 The first command creates a new fixture directory and refuses to replace a frozen fixture. Scoring verifies the database and label hashes. The 48-field English fixture tests the supplied Elm workflow with valid and malformed identifier controls, ambiguous metadata, a broken join, and unsupported types. Its results apply to these synthetic scenarios.
+
+### Evidence scanner
+
+The default `--engine evidence` mode reports semantic verification, business grouping, and privacy separately. It reuses the existing detector and MiniLM candidates. Records can carry provisional type and domain suggestions while verified decisions retain their evidence. It runs locally against a read-only SQLite snapshot. See [public validation](evaluation/PUBLIC_VALIDATION.md) for the frozen comparison.

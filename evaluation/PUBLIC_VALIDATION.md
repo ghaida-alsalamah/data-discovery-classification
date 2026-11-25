@@ -1,0 +1,14 @@
+# Evidence scanner validation
+
+Previous high development scores came from small synthetic fixtures whose naming and value conventions overlapped the classifier's assumptions. Exact domain labels confounded grouping quality with vocabulary coverage. The old scorer's high unreviewed accuracy also covered very few fields. The evidence scanner still uses the existing language model for tentative semantic candidates. It verifies keys and local value formats separately, uses identity context for ambiguous signals, and traces person links through measured declared relationships. Review reasons are available separately for semantics, business grouping, and privacy. Emerging groups use source subjects and supporting links, with stable grouping IDs and explanations in the catalog. The scanner works without a dictionary. Recommendations use the existing deterministic quality, privacy, and prerequisite checks. No source values are sent to a model service.
+
+The independent inputs are public sample databases prepared by external publishers. Use the released Chinook SQLite file from v1.4.5 as `data/external_validation/chinook.sqlite`. Place the Sakila SQLite schema and insert-data SQL files in that same directory with their original names. Source data stays in the ignored data directory. The evaluation annotations are repository-authored and distinguish unsupported exact labels, ambiguous privacy intent, and business grouping independently. They are not vendor gold labels. [Chinook release](https://github.com/lerocha/chinook-database/releases/tag/v1.4.5) · [Sakila SQLite port and license](https://github.com/jOOQ/sakila)
+
+```powershell
+python -m evaluation.public_catalog freeze
+python -m evaluation.public_catalog evaluate
+```
+
+The first command verifies complete schema coverage and hashes the database, labels, scanner and backend. The second runs both modes without a dictionary from the same frozen source. Exact semantics and strict domain accuracy retain their earlier definitions. Supported-known exact accuracy and unsupported abstentions are separate. B-cubed grouping scores compare memberships within a database and count unresolved predictions as singletons. Automated coverage counts whole fields that clear all review dimensions. Unreviewed joint accuracy uses the existing open-set semantic and domain matching policy and excludes uncertain privacy truth from that dimension. Strict metadata accuracy uses literal labels.
+
+Elm's six requirements map to the asset and access record, schema plus measured relationships, inferred business groups, field membership explanations, domain descriptions and links, and quality-aware utilization opportunities. The catalog carries unknown and provisional findings for specialist correction and records review changes. The existing workflow and tests exercise unclear names, uncertain classification, and limited-value opportunities. This is a local SQLite catalog and exports aggregate evidence.
