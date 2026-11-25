@@ -1,0 +1,14 @@
+acryl-datahub==1.6.0.5
+acryl-datahub-classify==0.0.11
+psycopg2-binary==2.9.13
+sqlglot==30.8.0
+SQLAlchemy==1.4.54
+numpy==1.26.4
+spacy==3.7.5
+boto3<2,>=1.35
+cachetools<6
+GeoAlchemy2<0.19
+patchy==2.8.0
+schwifty==2025.9.0
+sqlparse<0.6
+en-core-web-sm @ https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.7.1/en_core_web_sm-3.7.1-py3-none-any.whl#sha256=86cc141f63942d4b2c5fcee06630fd6f904788d2f0ab005cce45aadb8fb73889
