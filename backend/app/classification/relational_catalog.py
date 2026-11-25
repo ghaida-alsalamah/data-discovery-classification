@@ -156,7 +156,7 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
 
     for row in rows:
         table, field, kind = row["table_name"], row["column_name"], row["semantic_type"]
-        if row["semantic_type"] in DIRECT and row.get("semantic_verified", False):
+        if row.get("semantic_verified", False) and (kind in DIRECT or row["personal_linkage"] == "direct"):
             continue
         edges = [edge for edge in path_edges[table] if field in edge["data"]["source_columns"]]
         routes = [(edge, *shortest[edge["target"]]) for edge in edges if edge["target"] in shortest
@@ -216,7 +216,7 @@ def relate_groups(rows, grouped, tables, relationships, checks):
             row["review_dimensions"] = [d for d in row["review_dimensions"] if d != "domain"]
 
 
-def refine(connection, rows, schema, profiles, samples, relationships, checks, dictionary):
+def refine(connection, rows, schema, profiles, samples, relationships, checks, dictionary, *, resolve_privacy=True):
     info = descriptions(dictionary).get("tables", {})
     tables = {table["name"]: table for table in schema["tables"]}
     grouped = defaultdict(dict)
@@ -228,7 +228,8 @@ def refine(connection, rows, schema, profiles, samples, relationships, checks, d
             row["review_dimensions"] = [d for d in row["review_dimensions"] if d != "semantic"]
         grouped[table][field] = row
     relate_groups(rows, grouped, tables, relationships, checks)
-    apply_privacy(connection, rows, tables, grouped, relationships, checks)
+    if resolve_privacy:
+        apply_privacy(connection, rows, tables, grouped, relationships, checks)
     for row in rows:
         kind = row["semantic_type"]
         row["semantic_path"] = list(dict.fromkeys(v for v in (row["semantic_category"], kind) if v != "unknown"))

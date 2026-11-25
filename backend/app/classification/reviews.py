@@ -5,12 +5,13 @@ from .engine import IDENTIFIERS
 from .taxonomy import DOMAINS, TYPES
 
 
-def apply_reviews(predictions, reviews):
+def apply_reviews(predictions, reviews, *, semantic_extensions=None):
     if not isinstance(reviews, list):
         raise ValueError("The review file must be a list of correction records.")
     index = {(row["table_name"], row["column_name"]): row for row in predictions}
     allowed = {"semantic_type", "data_domain", "personal_data", "sensitivity"}
     domains = set(DOMAINS) | {row["data_domain"] for row in predictions} | {"unknown"}
+    extensions = semantic_extensions or {}
     history = []
     for entry in reviews:
         if not isinstance(entry, dict) or set(entry) != {"table", "field", "reviewer", "reviewed_at", "reason", "changes"}:
@@ -23,7 +24,7 @@ def apply_reviews(predictions, reviews):
         key = (entry["table"], entry["field"])
         if key not in index or not isinstance(changes, dict) or not changes or not set(changes) <= allowed:
             raise ValueError("Review specifies an unknown field or unsupported correction.")
-        valid = {"semantic_type": TYPES, "data_domain": domains, "personal_data": {"yes", "no", "uncertain"},
+        valid = {"semantic_type": TYPES.keys() | extensions.keys(), "data_domain": domains, "personal_data": {"yes", "no", "uncertain"},
                  "sensitivity": {"internal", "confidential", "restricted", "undetermined"}}
         if any(not isinstance(value, str) or value not in valid[dimension] for dimension, value in changes.items()):
             raise ValueError("Review correction uses an unsupported taxonomy value.")
@@ -32,7 +33,8 @@ def apply_reviews(predictions, reviews):
         row.update(changes)
         if "semantic_type" in changes:
             kind = changes["semantic_type"]
-            category = "identifier" if kind in IDENTIFIERS else TYPES[kind].category
+            category = (extensions[kind] if kind in extensions else
+                        "identifier" if kind in IDENTIFIERS else TYPES[kind].category)
             row.update(semantic_category=category,
                        semantic_path=list(dict.fromkeys(value for value in (category, kind) if value != "unknown")),
                        subtype_status="reviewed" if kind != "unknown" else "uncertain")

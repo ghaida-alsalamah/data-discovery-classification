@@ -19,7 +19,7 @@ def test_evidence_catalog_checks_identity_roles_groups_and_abstention(tmp_path):
             con.execute("INSERT INTO bayard_units VALUES (?,?,?)", (i, f"051000000{i}", "Room Four"))
             con.execute("INSERT INTO bayard_events VALUES (?,?,?,?,?)", (i, i, i, f"2025-01-{i:02}", None))
         con.execute("INSERT INTO orphan_records VALUES (1,99)")
-    result = AssetScan().scan(path)
+    result = AssetScan("evidence").scan(path)
     rows = {(r["table_name"], r["column_name"]): r for r in result["classifications"]}
     assert rows["directory", "email"]["privacy_role"] == "direct_identifier"
     assert rows["bayard_units", "asset_code"]["direct_pii_type"] is None
