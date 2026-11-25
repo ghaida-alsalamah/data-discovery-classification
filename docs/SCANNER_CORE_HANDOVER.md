@@ -6,7 +6,7 @@ The Scanner Core is a synchronous Python library and command-line tool. The serv
 
 | Entry point | Use |
 | --- | --- |
-| `python -m scripts.scan_data_asset DATABASE OUTPUT` | Read an SQLite source and write one UTF?8 JSON catalog |
+| `python -m scripts.scan_data_asset DATABASE OUTPUT` | Read an SQLite source and write one UTF-8 JSON catalog |
 | `scripts.scan_data_asset.AssetScan` | Run a scan in a worker and receive the catalog as a Python dictionary |
 | `scripts.scan_data_asset.write_report` | Serialize a catalog with the existing JSON writer |
 | `python -m scripts.run_pipeline` | Generate demonstration data and historical pipeline outputs |

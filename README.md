@@ -9,7 +9,7 @@
 [![Source](https://img.shields.io/badge/SQLite-read--only-397269)](#scanner-pipeline)
 [![Inference](https://img.shields.io/badge/Groq-GPT--OSS_120B-d45b36)](#getting-started)
 
-[Overview](#project-overview) ? [Architecture](#system-architecture) ? [Quickstart](#getting-started) ? [Evaluation](#evaluation-and-current-limitations) ? [Handover](docs/SCANNER_CORE_HANDOVER.md)
+[Overview](#project-overview) &middot; [Architecture](#system-architecture) &middot; [Quickstart](#getting-started) &middot; [Evaluation](#evaluation-and-current-limitations) &middot; [Handover](docs/SCANNER_CORE_HANDOVER.md)
 
 </div>
 
@@ -106,27 +106,27 @@ Source values and free-text metadata stay local. The Groq path sends only allowl
 | --- | --- |
 | Runtime and data access | Python 3.11, SQLite, SQLAlchemy |
 | Local evidence | Microsoft Presidio, phonenumbers, spaCy, optional MiniLM through ONNX Runtime |
-| Cloud reasoning | Groq Free, GPT?OSS 120B, HTTPX, structured JSON |
+| Cloud reasoning | Groq Free, GPT-OSS 120B, HTTPX, structured JSON |
 | Evaluation | Synthetic SQLite fixtures, sealed labels, pytest, per-database metrics |
 
 ## Repository Structure
 
 ```text
 .
-??? backend/
-?   ??? app/                       # Scanner Core Python modules
-?   ?   ??? connectors/            # Read-only SQLite access
-?   ?   ??? discovery/             # Schema and relationships
-?   ?   ??? profiling/             # Aggregate value profiles
-?   ?   ??? classification/        # Local evidence, Groq and privacy paths
-?   ?   ??? intelligence/          # Domains, quality and opportunities
-?   ??? requirements.txt
-??? scripts/scan_data_asset.py     # CLI and AssetScan API
-??? evaluation/                    # Evaluators and benchmark reports
-??? docs/                          # Integration guide and synthetic output excerpt
-??? tests/                         # Regression tests
-??? frontend/                      # Reserved for the frontend team
-??? .env.example                   # Empty local configuration template
+|-- backend/
+|   |-- app/                       # Scanner Core Python modules
+|   |   |-- connectors/            # Read-only SQLite access
+|   |   |-- discovery/             # Schema and relationships
+|   |   |-- profiling/             # Aggregate value profiles
+|   |   |-- classification/        # Local evidence, Groq and privacy paths
+|   |   `-- intelligence/          # Domains, quality and opportunities
+|   `-- requirements.txt
+|-- scripts/scan_data_asset.py     # CLI and AssetScan API
+|-- evaluation/                    # Evaluators and benchmark reports
+|-- docs/                          # Integration guide and synthetic output excerpt
+|-- tests/                         # Regression tests
+|-- frontend/                      # Reserved for the frontend team
+`-- .env.example                   # Empty local configuration template
 ```
 
 ## Getting Started
@@ -162,7 +162,7 @@ python -m scripts.scan_data_asset data/demo/synthetic.sqlite data/demo/catalog_g
 python -m pytest -q
 ```
 
-The default CLI is local. The Groq option selects the fixed GPT?OSS 120B model. Experimental grouping and alternative models require explicit invocation. A fresh setup can skip regression cases that require optional assets. See the [integration guide](docs/SCANNER_CORE_HANDOVER.md) for inputs, model assets, and the Python interface.
+The default CLI is local. The Groq option selects the fixed GPT-OSS 120B model. Experimental grouping and alternative models require explicit invocation. A fresh setup can skip regression cases that require optional assets. See the [integration guide](docs/SCANNER_CORE_HANDOVER.md) for inputs, model assets, and the Python interface.
 
 ## Example Output
 
@@ -190,7 +190,7 @@ This is a **functional prototype for assisted cataloging**. The 85% targets have
 
 Confidence estimates the strength of semantic evidence. It is a heuristic score and has not reliably ranked joint correctness across semantic, domain, and privacy decisions. Results vary by schema. A verified join can show reachability to a person without establishing that the field describes that person. Free-tier quotas can interrupt cloud processing.
 
-[Published metrics](evaluation/results/scanner_core_metrics.json) ? [Groq recovery](evaluation/GROQ_ARCHITECTURE_VALIDATION.md) ? [Domain annotation](evaluation/DOMAIN_ANNOTATION_GUIDELINES.md) ? [Verifier evaluation](evaluation/GROQ_VERIFIER_VALIDATION.md) ? [Model comparison](evaluation/GROQ_MODEL_COMPARISON.md)
+[Published metrics](evaluation/results/scanner_core_metrics.json) &middot; [Groq recovery](evaluation/GROQ_ARCHITECTURE_VALIDATION.md) &middot; [Domain annotation](evaluation/DOMAIN_ANNOTATION_GUIDELINES.md) &middot; [Verifier evaluation](evaluation/GROQ_VERIFIER_VALIDATION.md) &middot; [Model comparison](evaluation/GROQ_MODEL_COMPARISON.md)
 
 ## Development Status
 
@@ -200,4 +200,4 @@ Confidence estimates the strength of semantic evidence. It is a heuristic score 
 | Backend | **Planned** | Service integration, authorization, job execution, and managed storage |
 | Frontend | **Planned** | Catalog exploration and specialist review workflow |
 
-[Scanner Core handover](docs/SCANNER_CORE_HANDOVER.md) ? [Upstream notices](licenses/)
+[Scanner Core handover](docs/SCANNER_CORE_HANDOVER.md) &middot; [Upstream notices](licenses/)

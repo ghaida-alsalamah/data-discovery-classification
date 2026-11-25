@@ -69,7 +69,7 @@ The test contained five direct identifiers, all in customer deliveries. Both eng
 
 The 85% target was unmet. Twenty-two fields had expected semantic types outside the legacy taxonomy. Semantic coverage and person linkage varied substantially by database. Greater automated coverage produced three more fully correct fields, with low joint accuracy across the automated subset. The current result supports steward-reviewed discovery.
 
-The Qwen3.5 development run used 15.2 seconds of startup and 188.0 seconds of scan time, with about 5.8 GiB peak server working set on Iris Xe. An external-provider evaluation requires an approved HTTPS inference endpoint and its credentials. A higher-capacity local model evaluation would need a GPU host with at least 16 GiB of dedicated VRAM for a quantized 8B?14B model and its context. Neither resource was available for this run.
+The Qwen3.5 development run used 15.2 seconds of startup and 188.0 seconds of scan time, with about 5.8 GiB peak server working set on Iris Xe. An external-provider evaluation requires an approved HTTPS inference endpoint and its credentials. A higher-capacity local model evaluation would need a GPU host with at least 16 GiB of dedicated VRAM for a quantized 8B-14B model and its context. Neither resource was available for this run.
 
 ## Groq Free cataloging
 
