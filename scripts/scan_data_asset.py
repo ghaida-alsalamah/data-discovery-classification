@@ -3,11 +3,16 @@ import argparse
 from contextlib import ExitStack
 from dataclasses import asdict
 import json
+import os
 import sys
+
+import httpx
 from pathlib import Path
 from time import perf_counter
 
 from backend.app.classification.ai_evidence import DEFAULT_MODEL_PATH, PresidioEvidence, SemanticEvidence
+from backend.app.classification.context_provider import CatalogProvider
+from backend.app.classification.contextual_catalog import EntityEvidence, classify as classify_context
 from backend.app.classification.discovery_evidence import descriptions, enrich
 from backend.app.classification.english import EnglishMetadata, classify_content, refine
 from backend.app.classification.engine import HybridClassifier
@@ -32,17 +37,23 @@ LOCAL_ROOT = Path(".models/local-llm")
 FAST_MODEL = LOCAL_ROOT / "qwen2.5-1.5b-instruct-q4_k_m.gguf"
 OPEN_MODEL = LOCAL_ROOT / "Qwen3-4B-Instruct-2507-Q3_K_M.gguf"
 LOCAL_SERVER = LOCAL_ROOT / "bin/llama-server.exe"
-CATALOG_MODES = {"default", "enhanced", "english", "evidence", "relational", "open"}
+CONTEXT_MODEL = LOCAL_ROOT / "Qwen3.5-4B-Q4_K_M.gguf"
+CONTEXT_SERVER = LOCAL_ROOT / "b8400/llama-server.exe"
+CONTEXT_THREADS = 6
+CATALOG_MODES = {"contextual", "default", "enhanced", "english", "evidence", "relational", "open"}
 
 
 class AssetScan:
     def __init__(self, mode="default", assets=ASSETS, dependency_root=Path(".deps"), *, runtime=None,
-                 offline=False, local_model=None, local_server=LOCAL_SERVER):
+                 offline=False, local_model=None, local_server=None, provider=None, gpu_layers=0):
         self.mode = mode
         self.runtime = runtime
         self.offline = offline
-        self.local_model = local_model
-        self.local_server = local_server
+        self.local_model = local_model or (CONTEXT_MODEL if mode == "contextual" else None)
+        self.local_server = local_server or (CONTEXT_SERVER if mode == "contextual" else LOCAL_SERVER)
+        self.provider = provider
+        self.gpu_layers = gpu_layers
+        self.entity = EntityEvidence() if mode == "contextual" else None
         if mode == "open" and runtime is None:
             raise ValueError("The open scanner requires a local inference runtime.")
         self.pii = PIIEngineer(assets / "pii") if mode in {"pii", "upstream"} else None
@@ -65,17 +76,26 @@ class AssetScan:
         started = perf_counter()
         runtime = None if self.offline else self.runtime
         status = "offline" if self.offline or self.local_model is None else "unavailable"
+        provider = self.provider if not self.offline else None
         with ExitStack() as stack:
-            if self.mode == "default" and runtime is None and not self.offline and self.local_model is not None:
+            if (self.mode in {"default", "contextual"} and runtime is None and provider is None
+                    and not self.offline and self.local_model is not None):
                 try:
-                    runtime = stack.enter_context(launch(self.local_server, self.local_model))
+                    runtime = stack.enter_context(launch(
+                        self.local_server, self.local_model, threads=CONTEXT_THREADS if self.mode == "contextual" else 4,
+                        context_size=6144 if self.mode == "contextual" else 4096, gpu_layers=self.gpu_layers,
+                    ))
                 except (OSError, RuntimeError):
                     pass
             if runtime is not None:
                 status = "local"
-            return self._scan(db_path, dictionary, owner, description, reviews, runtime, status, started)
+            if self.mode == "contextual" and runtime is not None and provider is None:
+                provider = CatalogProvider(runtime.client, runtime.address, "local-catalog", runtime=runtime)
+            if provider is not None:
+                status = "approved_https" if provider.remote else "local"
+            return self._scan(db_path, dictionary, owner, description, reviews, runtime, provider, status, started)
 
-    def _scan(self, db_path, dictionary, owner, description, reviews, runtime, status, started):
+    def _scan(self, db_path, dictionary, owner, description, reviews, runtime, provider, status, started):
         name = db_path.stem
         asset = InformationAsset(name, description or "Read-only data discovery", owner or "unknown")
         with SQLiteConnector(db_path, asset).connect() as connection:
@@ -85,19 +105,23 @@ class AssetScan:
             profiles = profile_database(connection, schema, 500, self.detector)
             base = self.baseline.classify(schema, profiles)
             checks = None
+            context_summary = None
             if self.mode in CATALOG_MODES:
                 schema["asset"] = asdict(asset)
                 checks = verify_relationships(connection, schema, relationships)
-                if self.mode in {"default", "english", "evidence", "relational", "open"}:
+                if self.mode in {"contextual", "default", "english", "evidence", "relational", "open"}:
                     metadata = descriptions(dictionary)
                     samples_by_table = {t["name"]: collect(connection, t, profiles[t["name"]])
                                         for t in schema["tables"]}
-                if self.mode in {"default", "evidence", "relational", "open"}:
+                if self.mode in {"contextual", "default", "evidence", "relational", "open"}:
                     base = classify_evidence(base, schema, profiles, samples_by_table, relationships,
                                              checks, metadata, asset_description=description)
-                    if self.mode == "default":
-                        base = classify_default(connection, base, schema, profiles, samples_by_table,
-                                                relationships, checks, metadata, runtime)
+                    if self.mode in {"contextual", "default"}:
+                        base = classify_default(connection, base, schema, profiles, samples_by_table, relationships,
+                                                checks, metadata, None if self.mode == "contextual" else runtime)
+                        if self.mode == "contextual":
+                            base, context_summary = classify_context(provider, self.entity, connection, base, schema,
+                                                                     profiles, samples_by_table, relationships, checks)
                     elif self.mode == "open":
                         base = classify_open(runtime, connection, base, schema, profiles, relationships,
                                              checks, metadata)
@@ -131,7 +155,7 @@ class AssetScan:
                     else:
                         prediction = dict(prior)
                         label = DIRECT_NATIVE.get(prior["semantic_type"]) if prior["personal_data"] == "yes" else None
-                        if self.mode == "default":
+                        if self.mode in {"contextual", "default"}:
                             label = (label or DIRECT_EXTENSIONS.get(prior["semantic_type"])
                                      if prior["personal_linkage"] == "direct" else None)
                         prediction.update(direct_pii_type=label, direct_pii_status="yes" if label else "uncertain")
@@ -143,7 +167,7 @@ class AssetScan:
             review_history = []
             if reviews is not None:
                 extensions = ({row["semantic_type"]: row["semantic_category"] for row in predictions
-                               if row["semantic_type"] not in TYPES} | EXTENDED if self.mode == "default" else None)
+                               if row["semantic_type"] not in TYPES} | EXTENDED if self.mode in {"contextual", "default"} else None)
                 review_history = apply_reviews(predictions, reviews, semantic_extensions=extensions)
             if self.mode in CATALOG_MODES:
                 for row in predictions:
@@ -167,8 +191,10 @@ class AssetScan:
         }
         if self.mode in CATALOG_MODES:
             report["review_history"] = review_history
-        if self.mode == "default":
+        if self.mode in {"contextual", "default"}:
             report["context_runtime"] = status
+            if context_summary is not None:
+                report["context_summary"] = context_summary
             for table in profiles.values():
                 for profile in table.values():
                     # An extreme, or a statistic on a singleton, can reveal an exact numeric value.
@@ -185,7 +211,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("database", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--engine", choices=("default", "open", "relational", "evidence", "english", "enhanced",
+    parser.add_argument("--engine", choices=("contextual", "default", "open", "relational", "evidence", "english", "enhanced",
                                              "current", "pii", "doduo", "openmetadata", "upstream"), default="default")
     parser.add_argument("--dictionary", type=Path, help="Optional JSON database, table and field descriptions")
     parser.add_argument("--owner", help="Source asset owner as supplied by the operator")
@@ -193,19 +219,33 @@ if __name__ == "__main__":
     parser.add_argument("--reviews", type=Path, help="Ordered JSON specialist corrections to apply to the catalog")
     parser.add_argument("--model", type=Path, help="Local GGUF model override")
     parser.add_argument("--offline", action="store_true", help="Run the default scanner without contextual inference")
-    parser.add_argument("--llama-server", type=Path, default=LOCAL_SERVER)
+    parser.add_argument("--llama-server", type=Path)
+    parser.add_argument("--gpu-layers", type=int, default=0, help="Local llama.cpp offload layers")
+    parser.add_argument("--provider", action="store_true",
+                        help="Use the approved OpenAI-compatible endpoint from the LLM_* environment")
     args = parser.parse_args()
     if (args.dictionary or args.reviews) and args.engine not in CATALOG_MODES:
         parser.error("--dictionary and --reviews require a catalog scanner")
     data = json.loads(args.dictionary.read_text(encoding="utf-8")) if args.dictionary else None
     reviews = json.loads(args.reviews.read_text(encoding="utf-8")) if args.reviews else None
-    if args.offline and args.engine != "default":
-        parser.error("--offline applies to the default scanner")
+    if args.offline and args.engine not in {"contextual", "default"}:
+        parser.error("--offline applies to the contextual and default scanners")
+    if args.provider and (args.engine != "contextual" or args.offline):
+        parser.error("--provider requires the contextual scanner without --offline")
     with ExitStack() as stack:
-        runtime = (stack.enter_context(launch(args.llama_server, args.model or OPEN_MODEL))
+        runtime = (stack.enter_context(launch(args.llama_server or LOCAL_SERVER, args.model or OPEN_MODEL))
                    if args.engine == "open" else None)
+        provider = None
+        if args.provider:
+            base_url = os.environ.get("LLM_BASE_URL", "")
+            model = os.environ.get("LLM_MODEL", "")
+            if not base_url or not model:
+                parser.error("--provider requires LLM_BASE_URL and LLM_MODEL")
+            client = stack.enter_context(httpx.Client(timeout=90, trust_env=False, follow_redirects=False))
+            provider = CatalogProvider(client, base_url, model, api_key=os.environ.get("LLM_API_KEY", ""), remote=True)
         scanner = AssetScan(args.engine, runtime=runtime, offline=args.offline,
-                            local_server=args.llama_server, local_model=args.model)
+                            local_server=args.llama_server, local_model=args.model, provider=provider,
+                            gpu_layers=args.gpu_layers)
         write_report(args.output, scanner.scan(
             args.database, dictionary=data, owner=args.owner, description=args.description, reviews=reviews,
         ))

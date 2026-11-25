@@ -178,7 +178,7 @@ class Runtime:
 
 
 @contextmanager
-def launch(server, model, threads=4):
+def launch(server, model, threads=4, *, context_size=4096, gpu_layers=0):
     if not Path(server).is_file() or not Path(model).is_file():
         raise FileNotFoundError("Local llama-server or GGUF model missing.")
     with socket.socket() as sock:
@@ -189,7 +189,7 @@ def launch(server, model, threads=4):
     started = perf_counter()
     process = subprocess.Popen(
         [str(server), "-m", str(model), "--host", "127.0.0.1", "--port", str(port),
-         "-t", str(threads), "-tb", str(threads), "-c", "4096", "-np", "1", "-ngl", "0"],
+         "-t", str(threads), "-tb", str(threads), "-c", str(context_size), "-np", "1", "-ngl", str(gpu_layers)],
         cwd=server.parent, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     try:

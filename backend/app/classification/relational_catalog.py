@@ -126,7 +126,7 @@ def measured_path(connection, source, route, metadata):
 
 
 def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, extra_roots=(),
-                  resolve_verified_subject_attributes=False):
+                  resolve_verified_subject_attributes=False, subject_barriers=()):
     # Exact-key evidence is already calculated for every declared edge. Partial paths are
     # useful for review but are insufficient for an automatic negative or positive.
     _, outgoing = verified_graph(tables, relationships, checks)
@@ -141,7 +141,9 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
     for name, edges in outgoing.items():
         path_edges[name].extend(edges)
     roots = person_roots(grouped, tables) | set(extra_roots)
-    shortest = relationship_paths(roots, path_edges)
+    barriers = set(subject_barriers) - roots
+    shortest = relationship_paths(roots, {table: edges for table, edges in path_edges.items()
+                                          if table not in barriers})
     metadata = MetaData()
     coverage = {}
     def observe(table, route):
@@ -181,6 +183,11 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
                 verified_subject_attribute = (resolve_verified_subject_attributes and not route
                                               and row["semantic_verified"] and table in extra_roots)
                 privacy_review = not complete or role == "person_linked_attribute" and not verified_subject_attribute
+        elif barriers and row["personal_linkage"] == "linked":
+            row.update(personal_data="uncertain", personal_linkage="uncertain",
+                       privacy_role="unresolved_subject_scope", sensitivity="undetermined",
+                       personal_linkage_evidence={"method": "subject_path_unverified", "relationship_ids": []})
+            privacy_review = True
         elif kind == "reference_id" and row["privacy_role"] == "object_reference":
             # A verified match proves the referenced row exists. It does not prove that
             # an opaque target table lacks potentially identifying records.

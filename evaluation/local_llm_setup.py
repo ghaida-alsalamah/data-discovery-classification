@@ -4,7 +4,7 @@ import io
 import re
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from shutil import copyfileobj
+from shutil import copyfile, copyfileobj
 from urllib.request import Request, urlopen
 from zipfile import ZipFile
 
@@ -108,9 +108,50 @@ def open_weights():
     print("Verified Qwen 4B Q3_K_M weights", flush=True)
 
 
+def context_weights():
+    from scripts.scan_data_asset import CONTEXT_MODEL
+
+    ROOT.mkdir(parents=True, exist_ok=True)
+    revision = "8d43d974efc48399cb58957ad49c8b26bf5a109c"
+    url = "https://huggingface.co/ggml-org/Qwen3.5-4B-GGUF/resolve/" + revision + "/" + CONTEXT_MODEL.name
+    fetch(url, CONTEXT_MODEL, "217002fa8008ef4fc6d548353a3aebef055a96e6ff8e0e2c0953ef8254a89c14", 3032091584, 32)
+    print("Verified contextual model Qwen3.5-4B Q4_K_M", flush=True)
+
+
+def context_runtime(vulkan=False):
+    from scripts.scan_data_asset import CONTEXT_SERVER
+
+    ROOT.mkdir(parents=True, exist_ok=True)
+    build = "vulkan" if vulkan else "cpu"
+    archive = ROOT / f"llama-b8400-bin-win-{build}-x64.zip"
+    expected = ("7b416988a7f3a1668157c0b69ea697280e642ef59e68a90a14d2bb03950a940f" if vulkan else
+                "52147e47694608f7641dfac9b9fdfb34468107e641e8dffaa35424c1118116cd")
+    target = CONTEXT_SERVER.parent.with_name("b8400-vulkan") if vulkan else CONTEXT_SERVER.parent
+    if not archive.is_file() or sha(archive) != expected:
+        url = "https://github.com/ggml-org/llama.cpp/releases/download/b8400/" + archive.name
+        request = Request(url, headers={"User-Agent": "local-model-bootstrap"})
+        with urlopen(request, timeout=150) as response, archive.open("wb") as output:
+            copyfileobj(response, output, length=262144)
+    if sha(archive) != expected:
+        raise OSError("Context runtime failed checksum verification.")
+    target.mkdir(exist_ok=True)
+    with ZipFile(archive) as package:
+        for info in package.infolist():
+            filename = Path(info.filename).name
+            if re.fullmatch(r"(llama-server\.exe|[a-zA-Z0-9_.\-]+\.dll|LICENSE(?:\.txt)?)", filename):
+                (target / filename).write_bytes(package.read(info))
+    openmp = target / "libomp140.x86_64.dll"
+    legacy_openmp = SERVER.parent / openmp.name
+    if not openmp.exists() and legacy_openmp.exists():
+        copyfile(legacy_openmp, openmp)
+    print(f"Verified llama.cpp b8400 {build}", flush=True)
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("asset", choices=["runtime", "weights", "open-weights"])
+    parser.add_argument("asset", choices=["runtime", "weights", "open-weights", "context-weights", "context-runtime", "context-vulkan"])
     args = parser.parse_args()
-    {"runtime": runtime, "weights": weights, "open-weights": open_weights}[args.asset]()
+    {"runtime": runtime, "weights": weights, "open-weights": open_weights,
+     "context-weights": context_weights, "context-runtime": context_runtime,
+     "context-vulkan": lambda: context_runtime(vulkan=True)}[args.asset]()

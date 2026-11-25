@@ -4,6 +4,10 @@
 
 The native Metacrafter and DataHub workflows were benchmarked on three independent synthetic databases. Both fell below the release targets. See the [measured results and reproduction commands](evaluation/PLATFORM_ADOPTION.md).
 
+## Contextual catalog
+
+Use the [contextual catalog](evaluation/CONTEXTUAL_CATALOG.md) to combine local datatype evidence, English entity recognition, and verified relationship paths. The optional model uses a privacy-filtered schema summary. The guide includes the read-only command, provider setup, and the independent evaluation protocol.
+
 ## Historical scanner reproduction
 
 From the project directory with Python 3.11 and an activated virtual environment:
