@@ -39,3 +39,34 @@ python -m evaluation.contextual_eval final --selected offline
 ```
 
 The benchmark exports field classifications and metrics under `data/contextual_holdout`. The source downloads are available from the project mirror. [Schema sources](https://huggingface.co/datasets/target-benchmark/spider-corpus/tree/main/train_database)
+
+## Independent results
+
+The final run sealed the offline default selected from development at `f17accc`. It used 129 fields across four databases. No data dictionary was supplied.
+
+| Metric | Previous default | Contextual default |
+|---|---:|---:|
+| Exact semantic accuracy | 72.1% | 72.1% |
+| Broader semantic accuracy | 82.9% | 82.9% |
+| Domain grouping F1 | 84.6% | 84.6% |
+| Direct PII precision and recall | 100% / 100% | 100% / 100% |
+| Overall personal-data F1 | 65.7% | 65.7% |
+| Person-linked data F1 | 60.0% | 60.0% |
+| Automated coverage | 38.8% (50/129) | 46.5% (60/129) |
+| Group-membership joint accuracy | 28.0% (14/50) | 28.3% (17/60) |
+| Legacy literal domain accuracy | 12.4% | 12.4% |
+| Legacy automated joint accuracy | 22.0% | 18.3% |
+| Total scan time | 2.4 s | 3.3 s |
+
+The test contained five direct identifiers, all in customer deliveries. Both engines found all five and reported zero direct-PII false positives. Both missed all 22 person-linked labels in insurance. The person entities there have internal keys and general free text. The offline path lacked corroborating identity evidence to anchor the relationships.
+
+| Database | Fields | Exact semantics | Domain grouping F1 | Personal-data F1 | Automated fields | Joint successes |
+|---|---:|---:|---:|---:|---:|---:|
+| Customer deliveries | 51 | 92.2% | 92.1% | 95.8% | 25 | 15 |
+| Insurance claims | 30 | 90.0% | 78.3% | 0.0% | 18 | 2 |
+| Product catalog | 29 | 48.3% | 71.6% | Undefined | 16 | 0 |
+| Station weather | 19 | 26.3% | 90.4% | Undefined | 1 | 0 |
+
+The 85% target was unmet. Twenty-two fields had expected semantic types outside the legacy taxonomy. Semantic coverage and person linkage varied substantially by database. Greater automated coverage produced three more fully correct fields, with low joint accuracy across the automated subset. The current result supports steward-reviewed discovery.
+
+The Qwen3.5 development run used 15.2 seconds of startup and 188.0 seconds of scan time, with about 5.8 GiB peak server working set on Iris Xe. An external-provider evaluation requires an approved HTTPS inference endpoint and its credentials. A higher-capacity local model evaluation would need a GPU host with at least 16 GiB of dedicated VRAM for a quantized 8B?14B model and its context. Neither resource was available for this run.
