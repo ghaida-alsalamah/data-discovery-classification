@@ -126,7 +126,8 @@ def measured_path(connection, source, route, metadata):
 
 
 def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, extra_roots=(),
-                  resolve_verified_subject_attributes=False, subject_barriers=()):
+                  resolve_verified_subject_attributes=False, subject_barriers=(), check_context_scope=False,
+                  corroborated_roots=()):
     # Exact-key evidence is already calculated for every declared edge. Partial paths are
     # useful for review but are insufficient for an automatic negative or positive.
     _, outgoing = verified_graph(tables, relationships, checks)
@@ -142,8 +143,10 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
         path_edges[name].extend(edges)
     roots = person_roots(grouped, tables) | set(extra_roots)
     barriers = set(subject_barriers) - roots
-    shortest = relationship_paths(roots, {table: edges for table, edges in path_edges.items()
-                                          if table not in barriers})
+    scope_edges = {table: edges for table, edges in path_edges.items() if table not in barriers}
+    shortest = relationship_paths(roots, scope_edges)
+    if corroborated_roots:
+        shortest.update(relationship_paths(roots - set(corroborated_roots), scope_edges))
     metadata = MetaData()
     coverage = {}
     def observe(table, route):
@@ -166,9 +169,13 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
                   and all(item["source"] != table for item in shortest[edge["target"]])]
         route = min(routes, key=len, default=None)
         if route is None and kind not in KEY_TYPES and (row["semantic_category"] in LINKABLE_FAMILIES
-                or row.get("context_privacy_hypothesis") == "linked" and kind != "unknown"):
+                or row.get("context_privacy_hypothesis") == "linked"
+                and (kind != "unknown" or check_context_scope and row.get("context_status") == "completed")):
             if not has(field, ORGANIZATIONAL | BUSINESS):
-                route = shortest.get(table)
+                path = shortest.get(table)
+                if not (check_context_scope and path and len(path) > 1
+                        and row.get("context_privacy_hypothesis") != "linked"):
+                    route = path
         privacy_review = "privacy" in row["review_dimensions"]
         if table in extra_roots and kind == "record_id":
             route = ()
@@ -177,12 +184,17 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
             if found["matched_source_rows"] > 0:
                 complete = found["matched_source_rows"] == found["source_rows"]
                 role = "indirect_identifier" if kind in KEY_TYPES else "person_linked_attribute"
+                anchor = route[-1]["target"] if route else table
+                corroborated = anchor in corroborated_roots
+                subject_evidence = {"subject_evidence": "corroborated_entity"} if corroborated else {}
                 row.update(personal_data="yes", personal_linkage="linked", privacy_role=role,
-                           personal_linkage_evidence={"method":"measured_subject_path", **found},
+                           personal_linkage_evidence={"method":"measured_subject_path", **found, **subject_evidence},
                            sensitivity="restricted" if row["sensitivity"] == "restricted" else "confidential")
                 verified_subject_attribute = (resolve_verified_subject_attributes and not route
                                               and row["semantic_verified"] and table in extra_roots)
-                privacy_review = not complete or role == "person_linked_attribute" and not verified_subject_attribute
+                privacy_review = not complete or (
+                    role == "person_linked_attribute" and (corroborated or not verified_subject_attribute)
+                )
         elif barriers and row["personal_linkage"] == "linked":
             row.update(personal_data="uncertain", personal_linkage="uncertain",
                        privacy_role="unresolved_subject_scope", sensitivity="undetermined",

@@ -11,7 +11,7 @@ from pathlib import Path
 from time import perf_counter
 
 from backend.app.classification.ai_evidence import DEFAULT_MODEL_PATH, PresidioEvidence, SemanticEvidence
-from backend.app.classification.context_provider import CatalogProvider
+from backend.app.classification.context_provider import CatalogProvider, FreeCatalogProvider
 from backend.app.classification.contextual_catalog import EntityEvidence, classify as classify_context
 from backend.app.classification.discovery_evidence import descriptions, enrich
 from backend.app.classification.english import EnglishMetadata, classify_content, refine
@@ -223,7 +223,15 @@ if __name__ == "__main__":
     parser.add_argument("--gpu-layers", type=int, default=0, help="Local llama.cpp offload layers")
     parser.add_argument("--provider", action="store_true",
                         help="Use the approved OpenAI-compatible endpoint from the LLM_* environment")
+    parser.add_argument("--free-provider", choices=("groq", "gemini"),
+                        help="Use a dedicated Free account. Gemini is for synthetic data only.")
+    parser.add_argument("--experimental-purpose-domains", action="store_true",
+                        help="Evaluate the experimental domain grouping with a free provider")
     args = parser.parse_args()
+    if args.experimental_purpose_domains and not args.free_provider:
+        parser.error("--experimental-purpose-domains requires --free-provider")
+    if args.free_provider and (args.engine != "contextual" or args.offline or args.provider):
+        parser.error("--free-provider requires the contextual scanner and cannot be combined with --offline or --provider")
     if (args.dictionary or args.reviews) and args.engine not in CATALOG_MODES:
         parser.error("--dictionary and --reviews require a catalog scanner")
     data = json.loads(args.dictionary.read_text(encoding="utf-8")) if args.dictionary else None
@@ -236,6 +244,10 @@ if __name__ == "__main__":
         runtime = (stack.enter_context(launch(args.llama_server or LOCAL_SERVER, args.model or OPEN_MODEL))
                    if args.engine == "open" else None)
         provider = None
+        if args.free_provider:
+            client = stack.enter_context(httpx.Client(timeout=35, trust_env=False, follow_redirects=False))
+            provider = FreeCatalogProvider(client, args.free_provider)
+            provider.experimental_purpose_domains = args.experimental_purpose_domains
         if args.provider:
             base_url = os.environ.get("LLM_BASE_URL", "")
             model = os.environ.get("LLM_MODEL", "")

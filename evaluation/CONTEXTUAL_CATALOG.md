@@ -70,3 +70,17 @@ The test contained five direct identifiers, all in customer deliveries. Both eng
 The 85% target was unmet. Twenty-two fields had expected semantic types outside the legacy taxonomy. Semantic coverage and person linkage varied substantially by database. Greater automated coverage produced three more fully correct fields, with low joint accuracy across the automated subset. The current result supports steward-reviewed discovery.
 
 The Qwen3.5 development run used 15.2 seconds of startup and 188.0 seconds of scan time, with about 5.8 GiB peak server working set on Iris Xe. An external-provider evaluation requires an approved HTTPS inference endpoint and its credentials. A higher-capacity local model evaluation would need a GPU host with at least 16 GiB of dedicated VRAM for a quantized 8B?14B model and its context. Neither resource was available for this run.
+
+## Groq Free cataloging
+
+Use a dedicated Groq Free organization and turn on Zero Data Retention in its Data Controls. Store the key as `GROQ_API_KEY` in the ignored workspace `.env`, then run:
+
+```powershell
+.\.venv\Scripts\python.exe -m scripts.scan_data_asset data\synthetic.sqlite data\groq_catalog.json --free-provider groq
+```
+
+The scanner sends compact, allowlisted metadata and bucketed observations. Raw samples, dictionary descriptions, and evaluation labels stay local. Classification resumes with local evidence for fields whose cloud request fails. The integration uses a fixed model on the standard endpoint. The organization must remain on the Free plan for the $0 budget to hold. Logs and reports must stay local if the catalog contains confidential metadata.
+
+For a synthetic-only fallback run, explicitly pass `--free-provider gemini` with a `GEMINI_API_KEY` tied to an unbilled AI Studio Free project. Google may use free-tier input and output for product improvement. The scanner does not automatically switch providers.
+
+Run the development comparison with `python -m evaluation.contextual_eval groq --out data/groq_development`. For a fresh independent run from a clean output directory, run `python -m evaluation.groq_independent prepare`, then `freeze`, then `run`. The runner writes per-database predictions, metrics, and a seal under `data/groq_independent`. The seal covers the fixture contents and checked-in implementation inputs. Hosted provider weights and service capacity may change.

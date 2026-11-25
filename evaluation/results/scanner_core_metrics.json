@@ -1,0 +1,486 @@
+{
+  "scope": "Curated aggregate results from synthetic scanner evaluations. Runs represent different datasets and are not pooled.",
+  "release_target_met": false,
+  "cases": {
+    "production_verifier_holdout": {
+      "overall": {
+        "fields": 93,
+        "exact_semantic_accuracy": 0.8494623655913979,
+        "broader_semantic_accuracy": 0.8817204301075269,
+        "literal_domain_accuracy": 0.0,
+        "domain_membership_f1": 0.8515525401935611,
+        "direct_pii": {
+          "tp": 12,
+          "fp": 1,
+          "fn": 0,
+          "precision": 0.9230769230769231,
+          "recall": 1.0,
+          "f1": 0.96
+        },
+        "personal_data_f1": 0.7397260273972602,
+        "person_linked_f1": 0.625,
+        "automated_joint": {
+          "correct": 20,
+          "fields": 46,
+          "accuracy": 0.43478260869565216,
+          "coverage": 0.4946236559139785
+        }
+      },
+      "by_database": {
+        "equipment_leasing": {
+          "fields": 31,
+          "exact_semantic_accuracy": 0.8387096774193549,
+          "broader_semantic_accuracy": 0.8709677419354839,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.7383720930232558,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.631578947368421,
+          "person_linked_f1": 0.46153846153846156,
+          "automated_joint": {
+            "correct": 5,
+            "fields": 16,
+            "accuracy": 0.3125,
+            "coverage": 0.5161290322580645
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 20
+          }
+        },
+        "regional_health_transport": {
+          "fields": 32,
+          "exact_semantic_accuracy": 0.875,
+          "broader_semantic_accuracy": 0.90625,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.7784059301290611,
+          "direct_pii": {
+            "tp": 6,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.8571428571428571,
+          "person_linked_f1": 0.782608695652174,
+          "automated_joint": {
+            "correct": 6,
+            "fields": 17,
+            "accuracy": 0.35294117647058826,
+            "coverage": 0.53125
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 21
+          }
+        },
+        "aquaculture_supply": {
+          "fields": 30,
+          "exact_semantic_accuracy": 0.8333333333333334,
+          "broader_semantic_accuracy": 0.8666666666666667,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 1.0,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 1,
+            "fn": 0,
+            "precision": 0.75,
+            "recall": 1.0,
+            "f1": 0.8571428571428571
+          },
+          "personal_data_f1": 0.631578947368421,
+          "person_linked_f1": 0.5,
+          "automated_joint": {
+            "correct": 9,
+            "fields": 13,
+            "accuracy": 0.6923076923076923,
+            "coverage": 0.43333333333333335
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 19
+          }
+        }
+      },
+      "scan_seconds": 100.11038279999048,
+      "runtime": {
+        "requests": 7,
+        "failures": 0,
+        "prompt_tokens": 6073,
+        "completion_tokens": 4828,
+        "seconds": 94.53861379995942
+      },
+      "api_cost_usd": 0
+    },
+    "recovery_architecture_holdout": {
+      "overall": {
+        "fields": 84,
+        "exact_semantic_accuracy": 0.8809523809523809,
+        "broader_semantic_accuracy": 0.8928571428571429,
+        "literal_domain_accuracy": 0.0,
+        "domain_membership_f1": 0.8434544736581531,
+        "direct_pii": {
+          "tp": 9,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "personal_data_f1": 0.8421052631578947,
+        "person_linked_f1": 0.7931034482758621,
+        "automated_joint": {
+          "correct": 27,
+          "fields": 48,
+          "accuracy": 0.5625,
+          "coverage": 0.5714285714285714
+        }
+      },
+      "by_database": {
+        "event_hospitality": {
+          "fields": 26,
+          "exact_semantic_accuracy": 0.9230769230769231,
+          "broader_semantic_accuracy": 0.9230769230769231,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.828326180257511,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.8666666666666667,
+          "person_linked_f1": 0.8333333333333334,
+          "automated_joint": {
+            "correct": 13,
+            "fields": 19,
+            "accuracy": 0.6842105263157895,
+            "coverage": 0.7307692307692307
+          },
+          "context_status": {
+            "verified_locally": 9,
+            "completed": 17
+          }
+        },
+        "commercial_fisheries": {
+          "fields": 28,
+          "exact_semantic_accuracy": 0.8571428571428571,
+          "broader_semantic_accuracy": 0.8571428571428571,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 1.0,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.7058823529411765,
+          "person_linked_f1": 0.5454545454545454,
+          "automated_joint": {
+            "correct": 10,
+            "fields": 11,
+            "accuracy": 0.9090909090909091,
+            "coverage": 0.39285714285714285
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 17
+          }
+        },
+        "appliance_warranty": {
+          "fields": 30,
+          "exact_semantic_accuracy": 0.8666666666666667,
+          "broader_semantic_accuracy": 0.9,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.6982809721398934,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.896551724137931,
+          "person_linked_f1": 0.8695652173913043,
+          "automated_joint": {
+            "correct": 4,
+            "fields": 18,
+            "accuracy": 0.2222222222222222,
+            "coverage": 0.6
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 19
+          }
+        }
+      },
+      "scan_seconds": 148.88401650008745,
+      "runtime": {
+        "requests": 10,
+        "failures": 1,
+        "prompt_tokens": 6951,
+        "completion_tokens": 5273,
+        "seconds": 144.65324419992976,
+        "schema_retries": 2,
+        "provider_schema_rejection": 2,
+        "failure_field_schema": 1,
+        "split_batches": 1,
+        "recovery_attempts": 2,
+        "recovered_fields": 17
+      },
+      "api_cost_usd": 0
+    },
+    "model_challenger_holdout": {
+      "overall": {
+        "fields": 90,
+        "exact_semantic_accuracy": 0.8555555555555555,
+        "broader_semantic_accuracy": 0.9,
+        "literal_domain_accuracy": 0.0,
+        "domain_membership_f1": 0.8914378617348914,
+        "direct_pii": {
+          "tp": 11,
+          "fp": 2,
+          "fn": 1,
+          "precision": 0.8461538461538461,
+          "recall": 0.9166666666666666,
+          "f1": 0.88
+        },
+        "personal_data_f1": 0.8,
+        "person_linked_f1": 0.7636363636363637,
+        "automated_joint": {
+          "correct": 18,
+          "fields": 40,
+          "accuracy": 0.45,
+          "coverage": 0.4444444444444444
+        }
+      },
+      "by_database": {
+        "home_telecommunications": {
+          "fields": 31,
+          "exact_semantic_accuracy": 0.9354838709677419,
+          "broader_semantic_accuracy": 0.9354838709677419,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.8508574068538195,
+          "direct_pii": {
+            "tp": 6,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.918918918918919,
+          "person_linked_f1": 0.88,
+          "automated_joint": {
+            "correct": 6,
+            "fields": 15,
+            "accuracy": 0.4,
+            "coverage": 0.4838709677419355
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 20
+          }
+        },
+        "publishing_rights": {
+          "fields": 30,
+          "exact_semantic_accuracy": 0.8333333333333334,
+          "broader_semantic_accuracy": 0.9,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.8280571073867162,
+          "direct_pii": {
+            "tp": 2,
+            "fp": 1,
+            "fn": 1,
+            "precision": 0.6666666666666666,
+            "recall": 0.6666666666666666,
+            "f1": 0.6666666666666666
+          },
+          "personal_data_f1": 0.6363636363636364,
+          "person_linked_f1": 0.625,
+          "automated_joint": {
+            "correct": 3,
+            "fields": 15,
+            "accuracy": 0.2,
+            "coverage": 0.5
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 19
+          }
+        },
+        "industrial_waste_collection": {
+          "fields": 29,
+          "exact_semantic_accuracy": 0.7931034482758621,
+          "broader_semantic_accuracy": 0.8620689655172413,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 1.0,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 1,
+            "fn": 0,
+            "precision": 0.75,
+            "recall": 1.0,
+            "f1": 0.8571428571428571
+          },
+          "personal_data_f1": 0.7619047619047619,
+          "person_linked_f1": 0.7142857142857143,
+          "automated_joint": {
+            "correct": 9,
+            "fields": 10,
+            "accuracy": 0.9,
+            "coverage": 0.3448275862068966
+          },
+          "context_status": {
+            "verified_locally": 11,
+            "completed": 18
+          }
+        }
+      },
+      "scan_seconds": 136.50336039997637,
+      "runtime": {
+        "requests": 11,
+        "failures": 1,
+        "prompt_tokens": 6931,
+        "completion_tokens": 4255,
+        "seconds": 134.34271069976967,
+        "schema_retries": 3,
+        "provider_schema_rejection": 3,
+        "failure_field_schema": 1,
+        "split_batches": 1,
+        "recovery_attempts": 2,
+        "recovered_fields": 18
+      },
+      "api_cost_usd": 0
+    },
+    "production_model_development": {
+      "overall": {
+        "fields": 94,
+        "exact_semantic_accuracy": 0.7446808510638298,
+        "broader_semantic_accuracy": 0.8191489361702128,
+        "literal_domain_accuracy": 0.0,
+        "domain_membership_f1": 0.954373434673029,
+        "direct_pii": {
+          "tp": 14,
+          "fp": 0,
+          "fn": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0
+        },
+        "personal_data_f1": 0.8041237113402062,
+        "person_linked_f1": 0.7246376811594203,
+        "automated_joint": {
+          "correct": 39,
+          "fields": 49,
+          "accuracy": 0.7959183673469388,
+          "coverage": 0.5212765957446809
+        }
+      },
+      "by_database": {
+        "course_teach": {
+          "fields": 10,
+          "exact_semantic_accuracy": 0.6,
+          "broader_semantic_accuracy": 0.7,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.8235294117647058,
+          "direct_pii": {
+            "tp": 1,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.8,
+          "person_linked_f1": 0.75,
+          "automated_joint": {
+            "correct": 3,
+            "fields": 6,
+            "accuracy": 0.5,
+            "coverage": 0.6
+          },
+          "context_status": {
+            "verified_locally": 5,
+            "completed": 5
+          }
+        },
+        "community_care": {
+          "fields": 35,
+          "exact_semantic_accuracy": 0.7142857142857143,
+          "broader_semantic_accuracy": 0.8571428571428571,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 1.0,
+          "direct_pii": {
+            "tp": 3,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.8125,
+          "person_linked_f1": 0.7692307692307693,
+          "automated_joint": {
+            "correct": 16,
+            "fields": 18,
+            "accuracy": 0.8888888888888888,
+            "coverage": 0.5142857142857142
+          },
+          "context_status": {
+            "verified_locally": 8,
+            "completed": 27
+          }
+        },
+        "dog_kennels": {
+          "fields": 49,
+          "exact_semantic_accuracy": 0.7959183673469388,
+          "broader_semantic_accuracy": 0.8163265306122449,
+          "literal_domain_accuracy": 0.0,
+          "domain_membership_f1": 0.943980474033994,
+          "direct_pii": {
+            "tp": 10,
+            "fp": 0,
+            "fn": 0,
+            "precision": 1.0,
+            "recall": 1.0,
+            "f1": 1.0
+          },
+          "personal_data_f1": 0.8,
+          "person_linked_f1": 0.6857142857142857,
+          "automated_joint": {
+            "correct": 20,
+            "fields": 25,
+            "accuracy": 0.8,
+            "coverage": 0.5102040816326531
+          },
+          "context_status": {
+            "verified_locally": 14,
+            "completed": 35
+          }
+        }
+      },
+      "scan_seconds": 112.2702751000179,
+      "runtime": {
+        "requests": 9,
+        "failures": 0,
+        "prompt_tokens": 7825,
+        "completion_tokens": 4693,
+        "seconds": 106.24604449991602
+      },
+      "api_cost_usd": 0
+    }
+  }
+}

@@ -1,5 +1,9 @@
 """Development comparison and locked holdout evaluation for contextual cataloging."""
 import argparse
+
+import httpx
+
+from backend.app.classification.context_provider import FreeCatalogProvider
 from collections import Counter
 from pathlib import Path
 from subprocess import check_output
@@ -58,7 +62,12 @@ def run(mode, sources, out, model, server, gpu_layers=0):
             write_report(out / (name + ".json"), row)
             print(mode, name, row["context_status"], round(row["seconds"], 1), flush=True)
 
-    if mode == "local":
+    if mode in {"groq", "gemini"}:
+        with httpx.Client(timeout=35, trust_env=False, follow_redirects=False) as client:
+            provider = FreeCatalogProvider(client, mode)
+            scan(AssetScan("contextual", provider=provider))
+            write_report(out / "runtime.json", provider.counters)
+    elif mode == "local":
         with launch(server, model, threads=THREADS, context_size=6144, gpu_layers=gpu_layers) as runtime:
             scan(AssetScan("contextual", runtime=runtime))
             write_report(out / "runtime.json", {**runtime.counters, "startup_seconds": runtime.startup_seconds,
@@ -80,7 +89,7 @@ def run(mode, sources, out, model, server, gpu_layers=0):
     write_report(out / "metrics.json", {
         "overall": metrics(pooled, entries, "default"), "by_database": by_database,
         "seconds": sum(r["seconds"] for r in reports.values()), "wall_seconds": writes,
-        "runtime": read(out / "runtime.json") if mode == "local" else None,
+        "runtime": read(out / "runtime.json") if mode in {"local", "groq", "gemini"} else None,
     })
 
 
@@ -116,7 +125,7 @@ def final(action, model, server, selected, gpu_layers):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("baseline", "offline", "local", "prepare", "freeze", "final"))
+    parser.add_argument("action", choices=("baseline", "offline", "local", "groq", "gemini", "prepare", "freeze", "final"))
     parser.add_argument("--out", type=Path, default=Path("data/contextual_development"))
     parser.add_argument("--model", type=Path, default=CONTEXT_MODEL)
     parser.add_argument("--server", type=Path, default=CONTEXT_SERVER)
