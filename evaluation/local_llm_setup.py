@@ -87,7 +87,7 @@ def runtime():
     with ZipFile(archive) as package:
         for info in package.infolist():
             basename = Path(info.filename).name
-            if re.fullmatch(r"(llama-server\.exe|[a-zA-Z0-9_\-]+\.dll|LICENSE(?:\.txt)?)", basename):
+            if re.fullmatch(r"(llama-server\.exe|[a-zA-Z0-9_.\-]+\.dll|LICENSE(?:\.txt)?)", basename):
                 (SERVER.parent / basename).write_bytes(package.read(info))
     print("Verified llama.cpp b6500", flush=True)
 
@@ -98,9 +98,19 @@ def weights():
     print("Verified Qwen Q4_K_M weights", flush=True)
 
 
+def open_weights():
+    from scripts.scan_data_asset import OPEN_MODEL
+
+    ROOT.mkdir(parents=True, exist_ok=True)
+    revision = "a06e946bb6b655725eafa393f4a9745d460374c9"
+    url = "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/" + revision + "/" + OPEN_MODEL.name
+    fetch(url, OPEN_MODEL, "9c6e0763577125a994a9bea0bbd7a737ac4498b8a6a4e0f788727553af1806c9", 2075618400, 24)
+    print("Verified Qwen 4B Q3_K_M weights", flush=True)
+
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser()
-    parser.add_argument("asset", choices=["runtime", "weights"])
+    parser.add_argument("asset", choices=["runtime", "weights", "open-weights"])
     args = parser.parse_args()
-    (runtime if args.asset == "runtime" else weights)()
+    {"runtime": runtime, "weights": weights, "open-weights": open_weights}[args.asset]()

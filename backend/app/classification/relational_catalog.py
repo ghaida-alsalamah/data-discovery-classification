@@ -125,7 +125,7 @@ def measured_path(connection, source, route, metadata):
     return connection.scalar(select(func.count()).select_from(join))
 
 
-def apply_privacy(connection, rows, tables, grouped, relationships, checks):
+def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, extra_roots=()):
     # Exact-key evidence is already calculated for every declared edge. Partial paths are
     # useful for review but are insufficient for an automatic negative or positive.
     _, outgoing = verified_graph(tables, relationships, checks)
@@ -139,7 +139,7 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks):
             path_edges[edge["source"]].extend(verified[edge["source"]])
     for name, edges in outgoing.items():
         path_edges[name].extend(edges)
-    roots = person_roots(grouped, tables)
+    roots = person_roots(grouped, tables) | set(extra_roots)
     shortest = relationship_paths(roots, path_edges)
     metadata = MetaData()
     coverage = {}
@@ -162,15 +162,18 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks):
         routes = [(edge, *shortest[edge["target"]]) for edge in edges if edge["target"] in shortest
                   and all(item["source"] != table for item in shortest[edge["target"]])]
         route = min(routes, key=len, default=None)
-        if route is None and kind not in KEY_TYPES and row["semantic_category"] in LINKABLE_FAMILIES:
+        if route is None and kind not in KEY_TYPES and (row["semantic_category"] in LINKABLE_FAMILIES
+                or row.get("context_privacy_hypothesis") == "linked" and kind != "unknown"):
             if not has(field, ORGANIZATIONAL | BUSINESS):
                 route = shortest.get(table)
         privacy_review = "privacy" in row["review_dimensions"]
-        if route and len(route) < 64:
+        if table in extra_roots and kind == "record_id":
+            route = ()
+        if route is not None and len(route) < 64 and (route or table in extra_roots):
             found = observe(table, route)
             if found["matched_source_rows"] > 0:
                 complete = found["matched_source_rows"] == found["source_rows"]
-                role = "indirect_identifier" if kind == "reference_id" else "person_linked_attribute"
+                role = "indirect_identifier" if kind in KEY_TYPES else "person_linked_attribute"
                 row.update(personal_data="yes", personal_linkage="linked", privacy_role=role,
                            personal_linkage_evidence={"method":"measured_subject_path", **found},
                            sensitivity="restricted" if row["sensitivity"] == "restricted" else "confidential")
