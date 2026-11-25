@@ -4,6 +4,7 @@ from collections import Counter
 import json
 import os
 from pathlib import Path
+import re
 import subprocess
 import sys
 from tempfile import TemporaryDirectory
@@ -22,19 +23,25 @@ DATAHUB = Path(".deps/platform-datahub/Scripts/python.exe" if os.name == "nt"
                else ".deps/platform-datahub/bin/python")
 META_ARGS = ["--format", "full", "--output-format", "json", "--registry-offline", "--quiet", "--stdout"]
 
-# One-way mappings of equivalent native meanings. The file is sealed before inference.
+# One-way mappings of native meanings to the benchmark vocabulary.
 META_TYPES = {
     "email": "email_address", "phone": "phone_number", "phone_e164": "phone_number",
-    "person_fullname": "person_name", "person_firstname": "person_name", "person_lastname": "person_name",
+    "person_fullname": "person_name", "person_firstname": "person_name",
+    "person_midname": "person_name", "person_surname": "person_name", "person_name": "person_name",
+    "saiqama": "saudi_residency_id",
     "date": "date", "datetime": "date", "timestamp": "date", "year": "year",
-    "boolean": "boolean_flag", "iso4217curcode": "currency_code", "city": "city", "sacity": "city",
-    "address": "location", "trackingnumber": "tracking_code", "percentage": "percentage",
+    "boolean": "boolean_flag", "iso4217curcode": "currency_code", "city": "city", "uscity": "city", "sacity": "city",
+    "address": "location", "trackingnumber": "tracking_code", "percentage": "percentage", "comment": "free_text",
 }
 DATAHUB_TYPES = {
-    "EMAIL_ADDRESS": "email_address", "EMAIL": "email_address", "PHONE_NUMBER": "phone_number",
-    "PERSON_NAME": "person_name", "PERSON": "person_name", "NAME": "person_name",
-    "DATE": "date", "DATE_TIME": "date", "CITY": "city", "ADDRESS": "location",
+    "Email_Address": "email_address", "Phone_Number": "phone_number", "Full_Name": "person_name",
+    "Street_Address": "location", "Age": "age", "US_Social_Security_Number": "ssn",
 }
+DATAHUB_DIRECT = {
+    "Email_Address", "Phone_Number", "Full_Name", "IBAN", "US_Social_Security_Number",
+    "Credit_Debit_Card_Number", "US_Driving_License_Number",
+}
+DATAHUB_PERSONAL = DATAHUB_DIRECT | {"Street_Address", "Age", "Gender"}
 DIRECT = {"person_name", "phone_number", "email_address", "saudi_national_id", "saudi_residency_id"}
 
 
@@ -67,19 +74,19 @@ def native_command(args, *, env, cwd=None):
     if process.returncode:
         # Neither driver errors nor native logs are published as benchmark artifacts.
         raise RuntimeError(f"Native {args[2]} workflow exited with code {process.returncode}.")
-    return process.stdout, perf_counter() - started
+    return process, perf_counter() - started
 
 
 def run_meta(root, name):
     env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONPATH": str(META.resolve()),
            "METACRAFTER_RULES_DIR": str(RULES.resolve()), "METACRAFTER_RULES_OFFLINE": "1"}
     source = quote((root / (name + ".sqlite")).resolve().as_posix(), safe="/:")
-    text, seconds = native_command(
+    process, seconds = native_command(
         [sys.executable, "-m", "metacrafter", "scan", "sql", "sqlite:///file:" + source + "?mode=ro&uri=true",
          *META_ARGS, "--registry-path", str(REGISTRY.resolve())],
         env=env,
     )
-    report = json.loads(text)
+    report = json.loads(process.stdout)
     if not report["complete"] or report["errors"]:
         raise ValueError(f"Metacrafter reported incomplete coverage for {name}.")
     fields = []
@@ -123,25 +130,37 @@ def extract_terms(obj):
     return [item["urn"].rsplit(":", 1)[-1] for item in (obj or {}).get("terms", [])]
 
 
-def datahub_fields(entries):
+def schemas(entries):
     for entry in entries:
-        if entry.get("aspectName") != "schemaMetadata":
-            continue
-        aspect = entry["aspect"]
-        schema = json.loads(aspect["value"]) if "value" in aspect else aspect
-        table = entry["entityUrn"].split(",", 2)[1].rsplit(".", 1)[-1]
+        if entry.get("aspectName") == "schemaMetadata":
+            aspect = entry["aspect"]
+            yield entry["entityUrn"], json.loads(aspect["value"]) if "value" in aspect else aspect
+        elif "proposedSnapshot" in entry:
+            snapshot, = entry["proposedSnapshot"].values()
+            for aspect in snapshot["aspects"]:
+                for name, value in aspect.items():
+                    if name.rsplit(".", 1)[-1] == "SchemaMetadata":
+                        yield snapshot["urn"], value
+
+
+def datahub_fields(entries):
+    for urn, schema in schemas(entries):
+        table = urn.split(",", 2)[1].rsplit(".", 1)[-1]
         primary = set(schema.get("primaryKeys") or [])
-        foreign = {field for key in schema.get("foreignKeys") or [] for field in key.get("sourceFields", [])}
+        foreign = {field.removesuffix(")").rsplit(",", 1)[-1] if field.startswith("urn:li:schemaField:")
+                   else field for key in schema.get("foreignKeys") or [] for field in key.get("sourceFields", [])}
         for field in schema["fields"]:
             name = field["fieldPath"]
             native = extract_terms(field.get("glossaryTerms"))
             kinds = {DATAHUB_TYPES.get(label) for label in native}
             kinds.discard(None)
-            semantic = ("reference_id" if name in foreign else "record_id" if name in primary
+            is_primary = name in primary or field.get("isPartOfKey", False)
+            semantic = ("reference_id" if name in foreign else "record_id" if is_primary
                         else next(iter(kinds)) if len(kinds) == 1 else None)
             yield {"table": table, "column": name, "semantic_type": semantic, "native": native,
-                   "pii_reported": bool(kinds & DIRECT), "direct": bool(kinds & DIRECT),
-                   "primary_key": name in primary, "foreign_key": name in foreign}
+                   "pii_reported": bool(DATAHUB_PERSONAL.intersection(native)),
+                   "direct": bool(DATAHUB_DIRECT.intersection(native)),
+                   "primary_key": is_primary, "foreign_key": name in foreign}
 
 
 def run_datahub(_root, name):
@@ -151,12 +170,21 @@ def run_datahub(_root, name):
     with TemporaryDirectory(prefix="datahub-native-") as folder:
         recipe = Path(folder) / "recipe.json"
         output = Path(folder) / "metadata.json"
-        save(recipe, datahub_recipe(name, output))
-        _, seconds = native_command([str(DATAHUB.resolve()), "-m", "datahub", "ingest", "-c", str(recipe)], env=env)
+        save(recipe, datahub_recipe(name, Path(output.name)))
+        process, seconds = native_command(
+            [str(DATAHUB.resolve()), "-m", "datahub", "ingest", "-c", recipe.name, "--no-default-report"],
+            env=env, cwd=folder,
+        )
         fields = list(datahub_fields(read(output)))
-    if not fields:
-        raise ValueError("Native DataHub ingestion did not export schema fields.")
-    return {"seconds": seconds, "fields": fields, "versions": {"datahub": DATAHUB_VERSION}}
+        log = process.stdout + process.stderr
+    counts = {key: int(n) for key, n in re.findall(
+        r"['\"](num_tables_classification_(?:attempted|failed|found))['\"]\s*:\s*(\d+)", log)}
+    if (not fields or counts.get("num_tables_classification_attempted") != len({r["table"] for r in fields})
+            or counts.get("num_tables_classification_failed") != 0):
+        raise ValueError("DataHub did not report successful classification for all exported tables.")
+    return {"seconds": seconds, "fields": fields, "versions": {"datahub": DATAHUB_VERSION},
+            "classification_report": counts,
+            "recognizer_warnings": log.count("Failed to extract info type")}
 
 
 def ratio(numerator, denominator):
@@ -202,7 +230,7 @@ def summarize(rows, supported):
 
 def evaluate(root, name):
     databases = verify_inputs(root)
-    if configuration(root) != read(root / "protocol.json"):
+    if configuration(root) != read(root / (name + "_protocol.json")):
         raise ValueError("Frozen platform configuration changed.")
     runner, mapping = {"metacrafter": (run_meta, META_TYPES), "datahub": (run_datahub, DATAHUB_TYPES)}[name]
     out = root / name
@@ -228,12 +256,12 @@ def evaluate(root, name):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("freeze", "metacrafter", "datahub"))
+    parser.add_argument("action", choices=("freeze-metacrafter", "freeze-datahub", "metacrafter", "datahub"))
     parser.add_argument("--root", type=Path, default=ROOT)
     args = parser.parse_args()
-    if args.action == "freeze":
+    if args.action.startswith("freeze-"):
         verify_inputs(args.root)
-        target = args.root / "protocol.json"
+        target = args.root / (args.action.removeprefix("freeze-") + "_protocol.json")
         if target.exists():
             raise FileExistsError(target)
         save(target, configuration(args.root))

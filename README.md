@@ -1,5 +1,11 @@
 # Data discovery and classification
 
+## Platform adoption
+
+The native Metacrafter and DataHub workflows were benchmarked on three independent synthetic databases. Both fell below the release targets. See the [measured results and reproduction commands](evaluation/PLATFORM_ADOPTION.md).
+
+## Historical scanner reproduction
+
 From the project directory with Python 3.11 and an activated virtual environment:
 
 ```sh
