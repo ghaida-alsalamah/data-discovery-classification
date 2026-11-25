@@ -20,7 +20,7 @@ def test_default_catalog_validates_identifiers_and_keeps_source_values_local(tmp
             connection.execute("INSERT INTO Asset VALUES (?,?,?)", (i, phone, 83462210 + i))
             connection.execute("INSERT INTO Registry VALUES (?,?)", (i, ssn))
 
-    report = AssetScan(offline=True).scan(path)
+    report = AssetScan("default", offline=True).scan(path)
     rows = {(r["table_name"], r["column_name"]): r for r in report["classifications"]}
     assert report["mode"] == "default" and report["context_runtime"] == "offline"
     assert rows["Resident", "SSN"]["semantic_type"] == "ssn"

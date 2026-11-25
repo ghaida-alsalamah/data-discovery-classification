@@ -44,12 +44,12 @@ CATALOG_MODES = {"contextual", "default", "enhanced", "english", "evidence", "re
 
 
 class AssetScan:
-    def __init__(self, mode="default", assets=ASSETS, dependency_root=Path(".deps"), *, runtime=None,
+    def __init__(self, mode="contextual", assets=ASSETS, dependency_root=Path(".deps"), *, runtime=None,
                  offline=False, local_model=None, local_server=None, provider=None, gpu_layers=0):
         self.mode = mode
         self.runtime = runtime
         self.offline = offline
-        self.local_model = local_model or (CONTEXT_MODEL if mode == "contextual" else None)
+        self.local_model = local_model
         self.local_server = local_server or (CONTEXT_SERVER if mode == "contextual" else LOCAL_SERVER)
         self.provider = provider
         self.gpu_layers = gpu_layers
@@ -212,7 +212,7 @@ if __name__ == "__main__":
     parser.add_argument("database", type=Path)
     parser.add_argument("output", type=Path)
     parser.add_argument("--engine", choices=("contextual", "default", "open", "relational", "evidence", "english", "enhanced",
-                                             "current", "pii", "doduo", "openmetadata", "upstream"), default="default")
+                                             "current", "pii", "doduo", "openmetadata", "upstream"), default="contextual")
     parser.add_argument("--dictionary", type=Path, help="Optional JSON database, table and field descriptions")
     parser.add_argument("--owner", help="Source asset owner as supplied by the operator")
     parser.add_argument("--description", help="Asset description supplied by the operator and included in the export")

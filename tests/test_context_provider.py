@@ -57,7 +57,8 @@ def test_custody_link_preserves_person_reference_without_labeling_object_attribu
             db.execute("INSERT INTO Resident VALUES (?,?,?,?)", (i, "Noah", "Fenwright", f"contact.{i}@example.org"))
             db.execute("INSERT INTO Equipment VALUES (?,?,?)", (i, i, "2025-06-22"))
             db.execute("INSERT INTO Inspections VALUES (?,?,?)", (i, i, "2025-09-01"))
-    report = AssetScan("contextual", offline=True).scan(source)
+    report = AssetScan().scan(source)
+    assert report["mode"] == "contextual" and report["context_runtime"] == "offline"
     fields = {(r["table_name"], r["column_name"]): r for r in report["classifications"]}
     assert fields["Equipment", "owner_id"]["personal_linkage"] == "linked"
     assert fields["Equipment", "acquired_on"]["personal_linkage"] != "linked"

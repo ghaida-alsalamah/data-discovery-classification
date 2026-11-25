@@ -186,9 +186,9 @@ def evaluate(root, model, server):
         return by_database
 
     outputs["evidence"] = scan("evidence", AssetScan("evidence"))
-    outputs["default_offline"] = scan("default_offline", AssetScan(offline=True))
+    outputs["default_offline"] = scan("default_offline", AssetScan("default", offline=True))
     with launch(server, model, threads=THREADS) as runtime:
-        outputs["default"] = scan("default", AssetScan(runtime=runtime))
+        outputs["default"] = scan("default", AssetScan("default", runtime=runtime))
         runtime_report = {**runtime.counters, "startup_seconds": runtime.startup_seconds,
                           "peak_server_memory_mib": peak_memory(runtime.process.pid)}
     verify()
