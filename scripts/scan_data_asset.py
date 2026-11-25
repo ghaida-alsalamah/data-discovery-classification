@@ -7,7 +7,8 @@ from pathlib import Path
 from time import perf_counter
 
 from backend.app.classification.ai_evidence import DEFAULT_MODEL_PATH, PresidioEvidence, SemanticEvidence
-from backend.app.classification.discovery_evidence import enrich
+from backend.app.classification.discovery_evidence import descriptions, enrich
+from backend.app.classification.english import EnglishMetadata, classify_content, refine
 from backend.app.classification.engine import HybridClassifier
 from backend.app.classification.pretrained import DIRECT_NATIVE, DODUO_MAP, DoDuo, PIIEngineer
 from backend.app.classification.reviews import apply_reviews
@@ -24,7 +25,7 @@ ASSETS = Path(".models/upstream")
 
 
 class AssetScan:
-    def __init__(self, mode="enhanced", assets=ASSETS, dependency_root=Path(".deps")):
+    def __init__(self, mode="english", assets=ASSETS, dependency_root=Path(".deps")):
         self.mode = mode
         self.pii = PIIEngineer(assets / "pii") if mode in {"pii", "upstream"} else None
         self.doduo = None
@@ -39,25 +40,32 @@ class AssetScan:
             self.openmetadata = OpenMetadataPII()
         self.detector = PresidioEvidence()
         model_ready = all((DEFAULT_MODEL_PATH / name).is_file() for name in ("tokenizer.json", "onnx/model.onnx"))
-        semantic = SemanticEvidence(DEFAULT_MODEL_PATH) if model_ready or mode != "enhanced" else None
-        self.baseline = HybridClassifier(semantic)
+        semantic = SemanticEvidence(DEFAULT_MODEL_PATH) if model_ready or mode not in {"enhanced", "english"} else None
+        self.baseline = HybridClassifier(EnglishMetadata(semantic) if mode == "english" and semantic else semantic)
 
     def scan(self, db_path, *, dictionary=None, owner=None, description=None, reviews=None):
         started = perf_counter()
         name = db_path.stem
         asset = InformationAsset(name, description or "Read-only data discovery", owner or "unknown")
         with SQLiteConnector(db_path, asset).connect() as connection:
-            if self.mode == "enhanced":
+            if self.mode in {"enhanced", "english"}:
                 connection.exec_driver_sql("BEGIN")
             schema, relationships = discover(connection)
             profiles = profile_database(connection, schema, 500, self.detector)
             base = self.baseline.classify(schema, profiles)
             checks = None
-            if self.mode == "enhanced":
+            if self.mode in {"enhanced", "english"}:
                 schema["asset"] = asdict(asset)
                 checks = verify_relationships(connection, schema, relationships)
+                if self.mode == "english":
+                    metadata = descriptions(dictionary)
+                    samples_by_table = {t["name"]: collect(connection, t, profiles[t["name"]])
+                                        for t in schema["tables"]}
+                    classify_content(base, profiles, samples_by_table, metadata)
                 base = enrich(base, profiles, relationships, checks, dictionary, schema=schema,
                               asset_description=description)
+                if self.mode == "english":
+                    base = refine(base, profiles, metadata, relationships, checks, schema)
             baseline = {(row["table_name"], row["column_name"]): row for row in base}
             baseline_seconds = perf_counter() - started
             predictions, native = [], {}
@@ -85,7 +93,7 @@ class AssetScan:
                         "doduo_mapped": DODUO_MAP.get(scores[0]["type"]) if scores else None,
                     }
             review_history = apply_reviews(predictions, reviews) if reviews is not None else []
-            if self.mode == "enhanced":
+            if self.mode in {"enhanced", "english"}:
                 for row in predictions:
                     row["field_meaning"] = TYPES[row["semantic_type"]].english
                     row["potential_value"] = PURPOSES.get(row["data_domain"], "Confirm the domain before using this field.")
@@ -102,7 +110,7 @@ class AssetScan:
                 "total": perf_counter() - started,
             },
         }
-        if self.mode == "enhanced":
+        if self.mode in {"enhanced", "english"}:
             report["review_history"] = review_history
         return report
 
@@ -116,14 +124,14 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("database", type=Path)
     parser.add_argument("output", type=Path)
-    parser.add_argument("--engine", choices=("enhanced", "current", "pii", "doduo", "openmetadata", "upstream"), default="enhanced")
+    parser.add_argument("--engine", choices=("english", "enhanced", "current", "pii", "doduo", "openmetadata", "upstream"), default="english")
     parser.add_argument("--dictionary", type=Path, help="Optional JSON database, table and field descriptions")
     parser.add_argument("--owner", help="Source asset owner as supplied by the operator")
     parser.add_argument("--description", help="Asset description supplied by the operator and included in the export")
     parser.add_argument("--reviews", type=Path, help="Ordered JSON specialist corrections to apply to the catalog")
     args = parser.parse_args()
-    if (args.dictionary or args.reviews) and args.engine != "enhanced":
-        parser.error("--dictionary and --reviews require the enhanced engine")
+    if (args.dictionary or args.reviews) and args.engine not in {"enhanced", "english"}:
+        parser.error("--dictionary and --reviews require the English or enhanced scanner")
     data = json.loads(args.dictionary.read_text(encoding="utf-8")) if args.dictionary else None
     reviews = json.loads(args.reviews.read_text(encoding="utf-8")) if args.reviews else None
     write_report(args.output, AssetScan(args.engine).scan(

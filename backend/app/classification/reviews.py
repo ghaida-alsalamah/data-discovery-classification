@@ -10,6 +10,7 @@ def apply_reviews(predictions, reviews):
         raise ValueError("The review file must be a list of correction records.")
     index = {(row["table_name"], row["column_name"]): row for row in predictions}
     allowed = {"semantic_type", "data_domain", "personal_data", "sensitivity"}
+    domains = set(DOMAINS) | {row["data_domain"] for row in predictions} | {"unknown"}
     history = []
     for entry in reviews:
         if not isinstance(entry, dict) or set(entry) != {"table", "field", "reviewer", "reviewed_at", "reason", "changes"}:
@@ -22,7 +23,7 @@ def apply_reviews(predictions, reviews):
         key = (entry["table"], entry["field"])
         if key not in index or not isinstance(changes, dict) or not changes or not set(changes) <= allowed:
             raise ValueError("Review specifies an unknown field or unsupported correction.")
-        valid = {"semantic_type": TYPES, "data_domain": DOMAINS, "personal_data": {"yes", "no", "uncertain"},
+        valid = {"semantic_type": TYPES, "data_domain": domains, "personal_data": {"yes", "no", "uncertain"},
                  "sensitivity": {"internal", "confidential", "restricted", "undetermined"}}
         if any(not isinstance(value, str) or value not in valid[dimension] for dimension, value in changes.items()):
             raise ValueError("Review correction uses an unsupported taxonomy value.")
@@ -40,6 +41,9 @@ def apply_reviews(predictions, reviews):
         if "personal_data" in changes:
             row["personal_linkage"] = {"yes": "reviewed_personal", "no": "none", "uncertain": "uncertain"}[row["personal_data"]]
             row["personal_linkage_evidence"] = {"method": "specialist_review"}
+            if "privacy_role" in row:
+                row["privacy_role"] = {"yes": "reviewed_personal", "no": "non_personal",
+                                       "uncertain": "uncertain"}[row["personal_data"]]
             if "sensitivity" not in changes:
                 row["sensitivity"] = {"yes": "restricted" if row["sensitivity"] == "restricted" else "confidential",
                                       "no": "internal", "uncertain": "undetermined"}[row["personal_data"]]

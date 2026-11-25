@@ -82,3 +82,16 @@ For corrections, supply an ordered JSON array. Each entry has `table`, `field`, 
 Use synthetic or explicitly authorized sources. The scanner opens SQLite read-only, performs local inference, and exports structural and aggregate evidence. Keep source databases, dictionaries, catalogs and review files in the authorized workspace. For this evaluation, retain synthetic exports for at most 30 days unless a shorter organizational policy applies, then have the workspace owner remove the local copies. Keep any approved long-term review record separately under the owner's retention policy. The scanner does not perform automatic deletion.
 
 Run `pytest -q -s tests/test_elm_acceptance.py` for the fixed representative acceptance checks. Exact historical scores and their sealed artifacts remain pinned to the historical revision `431e34a`. Run the old sealed evaluation from that revision if you need to reproduce those hashes.
+
+### English scanner comparison
+
+The default scanner uses English metadata normalization and local content summaries. The previous scanner is available with `--engine enhanced`. The existing MiniLM weights are optional for scanning. Install the pinned assets above before reproducing this comparison. Inferred domains outside the fixed list are marked for review. The catalog exports privacy roles and path evidence while keeping source values local.
+
+```powershell
+python -m evaluation.english_fixture
+python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/before.json --engine enhanced
+python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/after.json
+python -m evaluation.english_score
+```
+
+The first command creates a new fixture directory and refuses to replace a frozen fixture. Scoring verifies the database and label hashes. The 48-field English fixture tests the supplied Elm workflow with valid and malformed identifier controls, ambiguous metadata, a broken join, and unsupported types. Its results apply to these synthetic scenarios.

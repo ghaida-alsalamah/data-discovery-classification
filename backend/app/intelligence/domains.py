@@ -55,10 +55,14 @@ def build_domains(predictions, relationships, quality):
 
     result = []
     for domain, fields in sorted(grouped.items()):
+        emerging = any(field.get("domain_resolution") == "emerging_table_purpose" for field in fields)
+        subject = domain.replace("_", " ")
         tables = defaultdict(list)
         for field in fields:
             resolution = field.get("domain_resolution", "uncertain")
             membership = {
+                "table_purpose": "The table purpose and surrounding fields support this business domain.",
+                "emerging_table_purpose": "The subject and function in the table metadata suggest an emerging domain.",
                 "field_description": "The field description names this domain.",
                 "table_description": "The table description provides a single domain candidate.",
                 "database_description": "The database description provides a single domain candidate.",
@@ -80,8 +84,10 @@ def build_domains(predictions, relationships, quality):
         result.append({
             "domain_name": domain,
             "description": (DOMAINS[domain][0].capitalize() + "." if domain in DOMAINS
+                            else f"Data about {subject} inferred from source table purpose." if emerging
                             else "Fields whose business domain needs confirmation."),
-            "purpose_and_business_value": PURPOSES.get(domain, "Resolve classification before use."),
+            "purpose_and_business_value": PURPOSES.get(domain, f"Understand {subject} activity and related records." if emerging
+                                                                else "Resolve classification before use."),
             "included_tables": [{"table_name": table, "columns": columns} for table, columns in tables.items()],
             "boundaries": ("Membership applies to the listed fields. A verified reference can support its own field's domain."
                            if any("classification_resolution" in field for field in fields)
