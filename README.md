@@ -61,7 +61,7 @@ python -m scripts.scan_data_asset sample.sqlite data/catalog_with_dictionary.jso
 python -m scripts.scan_data_asset sample.sqlite data/catalog_reviewed.json --dictionary descriptions.json --reviews reviews.json
 ```
 
-Install the backend dependencies first. The default scanner combines local validation and relationship evidence with bounded contextual inference when the model assets are installed. See [default scanner setup and validation](evaluation/DEFAULT_CATALOG.md). MiniLM assets are optional for scanning. The owner and exported asset description are operator-supplied. Omit the owner when it is unknown. The data dictionary accepts descriptive text only and is optional. Use the source's exact table and field names. Descriptions provide evidence and can leave a field unresolved.
+Install the backend dependencies first. The default scanner combines local field-purpose validation with measured relationship evidence. See [default scanner setup and validation](evaluation/DEFAULT_CATALOG.md). MiniLM assets are optional for scanning. The owner and exported asset description are operator-supplied. Omit the owner when it is unknown. The data dictionary accepts descriptive text only and is optional. Use the source's exact table and field names. Descriptions provide evidence and can leave a field unresolved.
 
 ```json
 {

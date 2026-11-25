@@ -21,14 +21,27 @@ EXTENDED = {"ssn": "identifier", "postal_code": "location", "age": "count",
 REGIONS = ("SA", "US", "GB", "CA", "AU")
 SSN = UsSsnRecognizer()
 ROLE_NAMES = {"first", "last", "given", "family", "middle", "surname", "full"}
+PERSON_ROLES = PERSON | set(
+    "actor administrator agent applicant athlete author candidate caregiver clinician coach contributor "
+    "doctor driver guardian individual instructor manager nurse officer operator owner participant "
+    "person physician player practitioner professional recipient representative reviewer "
+    "teacher tester user volunteer worker".split()
+)
+SHARED_CONTACT = {"branch", "business", "company", "department", "office", "organisation", "organization", "shared"}
+PHONE_PATTERN = r"[+(0-9][0-9 ().-]{5,24}(?:\s*(?:ext\.?|x)\s*\d{1,6})?"
+SSN_PATTERN = r"(?:\d{3}-\d{2}-\d{4}|\d{9})"
 
 
 def signature(value, pattern):
     return isinstance(value, (str, int)) and re.fullmatch(pattern, str(value).strip(), re.ASCII) is not None
 
 
+def phone_shape(value):
+    return signature(value, PHONE_PATTERN) and 7 <= sum(c.isdecimal() for c in str(value)) <= 19
+
+
 def phone_valid(value):
-    if not signature(value, r"[+0-9][0-9 ().-]{6,24}"):
+    if not phone_shape(value):
         return False
     raw = str(value).strip()
     # Bare digit strings need a recognized international prefix or a country format.
@@ -53,12 +66,18 @@ def set_type(row, kind, detail):
     row["review_dimensions"] = [d for d in row["review_dimensions"] if d != "semantic"]
 
 
-def direct(row, kind, detail):
+def direct(row, kind, detail, *, validation=None):
     set_type(row, kind, detail)
     row.update(personal_data="yes", personal_linkage="direct", privacy_role="direct_identifier",
                sensitivity="restricted" if kind=="ssn" else "confidential",
                personal_linkage_evidence={"method":"independent_content_check","relationship_ids":[]})
     row["review_dimensions"] = [d for d in row["review_dimensions"] if d != "privacy"]
+    if validation is not None:
+        checked, shaped, valid = validation
+        row["identifier_validation"] = {"semantic_type": kind, "checked": checked,
+                                        "structural": shaped, "valid": valid}
+        if valid / checked < .75:
+            row["review_dimensions"] = sorted(set(row["review_dimensions"]) | {"format"})
 
 
 def proportion(values, predicate):
@@ -76,24 +95,33 @@ def corroborate(row, values, profile, table_subject, paired_name):
         return
     name = normalize(row["column_name"])
     words = set(name.split())
-    if words & {"ssn"} or {"social","security"} <= words:
-        if proportion(values, lambda v: signature(v, r"(?:\d{3}-\d{2}-\d{4}|\d{9})")
-                      and not SSN.invalidate_result(str(v))
-                      and int(re.sub(r"\D", "", str(v))[:3]) < 900) >= .75:
-            direct(row, "ssn", "SSN metadata and local valid-format checks agree.")
+    if not has(name, BUSINESS) and (words & {"ssn"} or {"social", "security"} <= words):
+        shaped = [v for v in values if signature(v, SSN_PATTERN)]
+        valid = sum(not SSN.invalidate_result(str(v))
+                    and int(re.sub(r"\D", "", str(v))[:3]) < 900 for v in shaped)
+        if valid >= .75 * len(values) or table_subject and len(shaped) >= .5 * len(values):
+            direct(row, "ssn", "Identity metadata and observed identifier structure establish field purpose.",
+                   validation=(len(values), len(shaped), valid))
             return
     if row["semantic_type"] in KEYS:
         return
     personal_scope = table_subject or paired_name
     if words & {"phone", "mobile", "telephone", "cell"} and not has(name, BUSINESS):
-        if proportion(values, phone_valid) >= .75:
-            if personal_scope or words & {"personal","home","mobile","cell"}:
-                direct(row, "phone_number", "Phone metadata and validated numbering plans support an individual contact.")
-            elif row["semantic_type"] not in DIRECT:
-                set_type(row, "phone_number", "Phone metadata and validated numbering plans support this contact field.")
-                row["review_dimensions"] = sorted(set(row["review_dimensions"]) | {"privacy"})
+        shaped = sum(phone_shape(v) for v in values)
+        valid = sum(phone_valid(v) for v in values)
+        contact_role = not words & SHARED_CONTACT and (personal_scope or bool(words & {"personal", "home", "mobile", "cell"}))
+        if contact_role and (valid >= .75 * len(values) or personal_scope and shaped >= .5 * len(values)):
+            direct(row, "phone_number", "Contact metadata and sampled structure support an individual contact field.",
+                   validation=(len(values), shaped, valid))
             return
-    name_scope = paired_name or table_subject and (words & ROLE_NAMES or words == {"name"})
+        if valid >= .75 * len(values):
+            set_type(row, "phone_number", "Phone metadata and validated numbering plans support this contact field.")
+            if words & SHARED_CONTACT:
+                row.update(personal_data="uncertain", personal_linkage="uncertain", sensitivity="undetermined",
+                           privacy_role="unresolved_shared_contact")
+            row["review_dimensions"] = sorted(set(row["review_dimensions"]) | {"privacy"})
+            return
+    name_scope = paired_name or table_subject and (words & (ROLE_NAMES | PERSON_ROLES) or words == {"name"})
     if "name" in words and not has(name, BUSINESS) and name_scope:
         if name_shape(values) >= .85:
             direct(row, "person_name", "Name structure and person scope corroborate this identifying field.")
@@ -112,8 +140,8 @@ def corroborate(row, values, profile, table_subject, paired_name):
          lambda v: isinstance(v,(int,float)) and 0 <= v <= 100 or signature(v,r"[0-9]{1,2}(?:\.\d+)?%")),
         ("web_address", bool(words & {"url","website","homepage"}),
          lambda v: signature(v,r"https?://[^\s/]+\.[^\s]+")),
-        ("boolean_flag", bool(words & {"active","enabled","flag","valid"}) or name.startswith(("is ","has ")),
-         lambda v: str(v).strip().lower() in {"0","1","true","false","yes","no"}),
+        ("boolean_flag", bool(words & {"active", "enabled", "flag", "valid"}) or name.startswith(("is ", "has ")),
+         lambda v: str(v).strip().lower() in {"0", "1", "true", "false", "yes", "no", "y", "n", "t", "f"}),
     ]
     for kind, named, validates in rules:
         if named and proportion(values, validates) >= .85:
@@ -175,9 +203,9 @@ def finalize(connection, rows, schema, profiles, samples, relationships, checks,
     by_table=defaultdict(dict)
     for row in rows:
         by_table[row["table_name"]][row["column_name"]]=row
-    subjects={t for t, fields in by_table.items()
-              if has(t, PERSON) and not has(t,BUSINESS)
-              or any(r["semantic_type"]=="email_address" and r["semantic_verified"] for r in fields.values())}
+    subjects = {t for t, fields in by_table.items()
+                if has(t, PERSON_ROLES) and not has(t, BUSINESS)
+                or any(r["semantic_type"] == "email_address" and r["semantic_verified"] for r in fields.values())}
     roots=set()
     for t, fields in by_table.items():
         paired=sum("name" in normalize(c).split() and bool(set(normalize(c).split())&ROLE_NAMES)
@@ -185,8 +213,9 @@ def finalize(connection, rows, schema, profiles, samples, relationships, checks,
         for c,row in fields.items():
             corroborate(row,samples[t][c],profiles[t][c],t in subjects,paired)
         identities={r["semantic_type"] for r in fields.values() if r["personal_linkage"]=="direct"}
-        if (tables[t]["primary_key"]["constrained_columns"] and "person_name" in identities
-                and (paired or len(identities)>1 or t in subjects)):
+        if (tables[t]["primary_key"]["constrained_columns"]
+                and (("person_name" in identities and (paired or len(identities) > 1 or t in subjects))
+                     or t in subjects and identities & {"ssn", "saudi_national_id", "saudi_residency_id"})):
             roots.add(t)
     rows = refine(connection, rows, schema, profiles, samples, relationships, checks, metadata, resolve_privacy=False)
     for t, fields in by_table.items():
@@ -198,7 +227,8 @@ def finalize(connection, rows, schema, profiles, samples, relationships, checks,
                     row["review_dimensions"]=[d for d in row["review_dimensions"] if d!="domain"]
 
     route_context(rows,tables,profiles,metadata.get("tables",{}),runtime)
-    apply_privacy(connection,rows,tables,by_table,relationships,checks,extra_roots=roots)
+    apply_privacy(connection, rows, tables, by_table, relationships, checks,
+                  extra_roots=roots, resolve_verified_subject_attributes=True)
     for row in rows:
         kind=row["semantic_type"]
         row["semantic_path"]=list(dict.fromkeys(x for x in (row["semantic_category"],kind) if x!="unknown"))

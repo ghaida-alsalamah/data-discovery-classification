@@ -101,6 +101,9 @@ def value_indicators(values, strings):
     return {
         "numeric": len(numeric),
         "binary": sum(str(value).casefold() in {"0", "1", "true", "false"} for value in values),
+        "boolean_conventional": sum(str(value).strip().casefold() in
+                                    {"0", "1", "true", "false", "y", "n", "t", "f", "yes", "no"}
+                                    for value in values),
         "negative": sum(value.is_signed() and not value.is_zero() and value.is_finite()
                         if isinstance(value, Decimal) else value < 0 for value in numeric),
         "currency": sum(value.strip().upper() in CURRENCIES for value in strings),

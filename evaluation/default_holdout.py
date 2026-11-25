@@ -84,12 +84,12 @@ def configuration(model, server):
     }
 
 
-def freeze(root, model, server):
+def freeze(root, model, server, *, labels=LABELS, configure=configuration):
     seal = root / "seal.json"
     if seal.exists():
         raise FileExistsError(seal)
     inputs = {}
-    for name, tables in LABELS.items():
+    for name, tables in labels.items():
         db = root / (name + ".sqlite")
         truth = {}
         for table, (domain, specification) in tables.items():
@@ -107,7 +107,7 @@ def freeze(root, model, server):
         tags = root / (name + "_labels.json")
         write_report(tags, truth)
         inputs.update({p.name: digest(p) for p in (db, tags)})
-    write_report(seal, {"configuration": configuration(model, server), "inputs": inputs})
+    write_report(seal, {"configuration": configure(model, server), "inputs": inputs})
 
 
 def joint_by_membership(rows):

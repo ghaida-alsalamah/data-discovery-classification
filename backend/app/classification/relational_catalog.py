@@ -125,7 +125,8 @@ def measured_path(connection, source, route, metadata):
     return connection.scalar(select(func.count()).select_from(join))
 
 
-def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, extra_roots=()):
+def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, extra_roots=(),
+                  resolve_verified_subject_attributes=False):
     # Exact-key evidence is already calculated for every declared edge. Partial paths are
     # useful for review but are insufficient for an automatic negative or positive.
     _, outgoing = verified_graph(tables, relationships, checks)
@@ -177,7 +178,9 @@ def apply_privacy(connection, rows, tables, grouped, relationships, checks, *, e
                 row.update(personal_data="yes", personal_linkage="linked", privacy_role=role,
                            personal_linkage_evidence={"method":"measured_subject_path", **found},
                            sensitivity="restricted" if row["sensitivity"] == "restricted" else "confidential")
-                privacy_review = not complete or role == "person_linked_attribute"
+                verified_subject_attribute = (resolve_verified_subject_attributes and not route
+                                              and row["semantic_verified"] and table in extra_roots)
+                privacy_review = not complete or role == "person_linked_attribute" and not verified_subject_attribute
         elif kind == "reference_id" and row["privacy_role"] == "object_reference":
             # A verified match proves the referenced row exists. It does not prove that
             # an opaque target table lacks potentially identifying records.

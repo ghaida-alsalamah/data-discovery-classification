@@ -37,7 +37,7 @@ CATALOG_MODES = {"default", "enhanced", "english", "evidence", "relational", "op
 
 class AssetScan:
     def __init__(self, mode="default", assets=ASSETS, dependency_root=Path(".deps"), *, runtime=None,
-                 offline=False, local_model=FAST_MODEL, local_server=LOCAL_SERVER):
+                 offline=False, local_model=None, local_server=LOCAL_SERVER):
         self.mode = mode
         self.runtime = runtime
         self.offline = offline
@@ -64,9 +64,9 @@ class AssetScan:
     def scan(self, db_path, *, dictionary=None, owner=None, description=None, reviews=None):
         started = perf_counter()
         runtime = None if self.offline else self.runtime
-        status = "offline" if self.offline else "unavailable"
+        status = "offline" if self.offline or self.local_model is None else "unavailable"
         with ExitStack() as stack:
-            if self.mode == "default" and runtime is None and not self.offline:
+            if self.mode == "default" and runtime is None and not self.offline and self.local_model is not None:
                 try:
                     runtime = stack.enter_context(launch(self.local_server, self.local_model))
                 except (OSError, RuntimeError):
@@ -205,7 +205,7 @@ if __name__ == "__main__":
         runtime = (stack.enter_context(launch(args.llama_server, args.model or OPEN_MODEL))
                    if args.engine == "open" else None)
         scanner = AssetScan(args.engine, runtime=runtime, offline=args.offline,
-                            local_server=args.llama_server, local_model=args.model or FAST_MODEL)
+                            local_server=args.llama_server, local_model=args.model)
         write_report(args.output, scanner.scan(
             args.database, dictionary=data, owner=args.owner, description=args.description, reviews=reviews,
         ))

@@ -26,6 +26,7 @@ def test_default_catalog_validates_identifiers_and_keeps_source_values_local(tmp
     assert rows["Resident", "SSN"]["semantic_type"] == "ssn"
     assert rows["Resident", "SSN"]["direct_pii_type"] == "government_id"
     assert rows["Resident", "home_phone"]["direct_pii_type"] == "phone_number"
+    assert rows["Resident", "home_phone"]["identifier_validation"]["valid"] == 4
     assert rows["Asset", "asset_phone"]["direct_pii_type"] is None
     assert rows["Registry", "owner_ref"]["personal_linkage"] == "linked"
     assert report["domains"]["domains"]

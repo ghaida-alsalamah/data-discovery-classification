@@ -137,7 +137,15 @@ def assess_quality(connection, schema, relationships, profiles, predictions, *, 
         profile = profiles[table][name]
         kind = prediction["semantic_type"]
         sample = profile["sample_count"]
-        if kind in PATTERNS and "local_detection" in profile:
+        identifier = prediction.get("identifier_validation")
+        if identifier and identifier["semantic_type"] == kind:
+            check(field, "validity", "invalid_format", identifier["checked"] - identifier["valid"],
+                  identifier["checked"], "sample_based",
+                  f"Non-null sample values fail the {kind} format check.",
+                  "The intended identifier field can contain invalid or unverified values.",
+                  "Verify identifiers at the source and separate invalid entries.",
+                  {"structural_matches": identifier["structural"]})
+        elif kind in PATTERNS and "local_detection" in profile:
             hits = profile["local_detection"].get(kind, {})
             invalid_structure = sample - hits.get("structural", 0)
             invalid_format = hits.get("format_invalid", 0)
@@ -157,8 +165,10 @@ def assess_quality(connection, schema, relationships, profiles, predictions, *, 
         if category in {"count", "duration", "boolean_flag", "currency"} and indicators:
             if category in {"count", "duration"}:
                 bad = sample - indicators["numeric"] + indicators["negative"]
+            elif category == "boolean_flag":
+                bad = sample - indicators.get("boolean_conventional", indicators["binary"])
             else:
-                bad = sample - indicators["binary" if category == "boolean_flag" else "currency"]
+                bad = sample - indicators["currency"]
             check(field, "validity", "invalid_value", bad, sample, "sample_based",
                   f"Sample values fall outside the expected {category} representation.",
                   "Invalid values may distort summaries and comparisons.",
