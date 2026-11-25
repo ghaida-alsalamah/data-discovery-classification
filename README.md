@@ -1,111 +1,203 @@
-# Data discovery and classification
+<div align="center">
 
-## Platform adoption
+# Data Discovery & Classification
 
-The native Metacrafter and DataHub workflows were benchmarked on three independent synthetic databases. Both fell below the release targets. See the [measured results and reproduction commands](evaluation/PLATFORM_ADOPTION.md).
+**Scanner Core for Elm Challenge 1**
 
-## Contextual catalog
+[![Stage](https://img.shields.io/badge/stage-Scanner_Core-245a70)](#development-status)
+[![Python](https://img.shields.io/badge/Python-3.11-356e9e)](#getting-started)
+[![Source](https://img.shields.io/badge/SQLite-read--only-397269)](#scanner-pipeline)
+[![Inference](https://img.shields.io/badge/Groq-GPT--OSS_120B-d45b36)](#getting-started)
 
-Use the [contextual catalog](evaluation/CONTEXTUAL_CATALOG.md) to combine local datatype evidence, English entity recognition, and verified relationship paths. The optional model uses a privacy-filtered schema summary. The guide includes the read-only command, provider setup, and the independent evaluation protocol.
+[Overview](#project-overview) ? [Architecture](#system-architecture) ? [Quickstart](#getting-started) ? [Evaluation](#evaluation-and-current-limitations) ? [Handover](docs/SCANNER_CORE_HANDOVER.md)
 
-## Historical scanner reproduction
+</div>
 
-From the project directory with Python 3.11 and an activated virtual environment:
+## Project Overview
 
-```sh
+Database names and SQL types rarely tell a data steward enough about what records mean, whom they describe, or how they can be used. The Scanner Core inspects authorized SQLite databases and exports an evidence-backed catalog of their schema, sensitive fields, business domains, quality issues, and potential uses.
+
+The prototype supports the six Elm Challenge 1 requirements through a read-only asset inventory, field and relationship analysis, domain assignment and descriptions, and quality-aware opportunities. Specialists can review uncertain decisions and apply recorded corrections.
+
+## Key Features
+
+| Capability | Scanner Core output |
+| --- | --- |
+| Discovery and profiling | Asset scope, owner supplied by the operator, schema, keys, relationships, and aggregate profiles |
+| Semantic classification | Field meaning, category, specific type, supporting evidence, and explicit uncertainty |
+| Domain grouping | Business groups, field membership reasons, boundaries, and cross-domain relationships |
+| Direct PII detection | Local Presidio evidence and format checks, including Saudi identifier validators |
+| Person-linked data | Verified join paths, person-anchor evidence, and linkage explanations |
+| Confidence and review | Heuristic semantic confidence, review dimensions, correction input, and review history |
+| Quality and opportunities | Quality checks and potential uses with technical readiness and usage restrictions |
+
+## System Architecture
+
+```mermaid
+flowchart LR
+    DB[(Authorized SQLite asset)]
+    ENV["Optional .env credentials"]
+    GROQ["Groq Free<br/>GPT-OSS 120B"]
+    JSON["Structured catalog JSON"]
+    subgraph CORE["Implemented Scanner Core"]
+        direction TB
+        CLI["CLI and Python entry points"]
+        DISC["Read-only discovery and profiling"]
+        CLASS["Evidence and contextual classification"]
+        INTEL["Domains, quality and opportunities"]
+        CLI --> DISC --> CLASS --> INTEL
+    end
+    DB --> DISC
+    ENV --> CLASS
+    CLASS <-->|"Sanitized schema and aggregates"| GROQ
+    INTEL --> JSON
+    JSON -.-> API["Backend service<br/>Planned"]
+    API -.-> UI["Specialist interface<br/>Planned"]
+    classDef planned fill:#f3f5f7,color:#354455,stroke:#778696,stroke-dasharray:5 4
+    class API,UI planned
+```
+
+## Scanner Pipeline
+
+```mermaid
+flowchart TD
+    A["Open SQLite read-only and start a snapshot"]
+    B["Discover schema and profile values locally"]
+    C["Detect semantic and direct PII candidates<br/>Presidio, validators and optional MiniLM"]
+    D["Verify declared relationships<br/>Collect bounded local evidence and optional descriptions"]
+    E["Build and check local field and privacy proposals"]
+    F{"Groq Free enabled?"}
+    G["Send compact batches of sanitized field<br/>and relationship evidence"]
+    H{"Valid structured response?"}
+    R["Recover eligible failures<br/>Schema retry or split failed field batch"]
+    S{"Any valid recovered proposals?"}
+    L["Use local evidence where cloud proposals are unavailable"]
+    I["Reconcile available proposals with local evidence"]
+    J["Confirm person anchors and measure subject paths"]
+    K["Apply production domain grouping<br/>Use local grouping if cloud grouping is unavailable"]
+    M["Apply optional specialist corrections"]
+    N["Assess quality and opportunity readiness<br/>Export catalog and review history"]
+
+    A --> B --> C --> D --> E --> F
+    F -->|Yes| G --> H
+    H -->|Yes| I
+    H -->|No| R --> S
+    S -->|Yes| I
+    S -->|No or quota exhausted| L
+    F -->|No| L
+    L --> I --> J --> K --> M --> N
+```
+
+Source values and free-text metadata stay local. The Groq path sends only allowlisted hints, bucketed evidence, and compact relationship context. Successful recovery fragments are retained, and fields without a usable response continue through local classification.
+
+## Classification Approach
+
+| Decision | Evidence used |
+| --- | --- |
+| Semantic type | SQL storage type, metadata, local value patterns, neighboring fields, and structured Groq proposals when enabled |
+| Domain membership | Subject and business purpose, field context, and corroborating relationships. A foreign key alone does not establish shared purpose |
+| Direct PII | Locally checked formats and content evidence, with contact ownership considered separately |
+| Person-linked data | Corroborated person anchors plus measured paths through declared relationships. Path evidence and review requirements are exported |
+| Uncertainty | Unresolved or conflicting semantics, domain, privacy, or format evidence can trigger specialist review |
+
+## Technology Stack
+
+| Layer | Technology |
+| --- | --- |
+| Runtime and data access | Python 3.11, SQLite, SQLAlchemy |
+| Local evidence | Microsoft Presidio, phonenumbers, spaCy, optional MiniLM through ONNX Runtime |
+| Cloud reasoning | Groq Free, GPT?OSS 120B, HTTPX, structured JSON |
+| Evaluation | Synthetic SQLite fixtures, sealed labels, pytest, per-database metrics |
+
+## Repository Structure
+
+```text
+.
+??? backend/
+?   ??? app/                       # Scanner Core Python modules
+?   ?   ??? connectors/            # Read-only SQLite access
+?   ?   ??? discovery/             # Schema and relationships
+?   ?   ??? profiling/             # Aggregate value profiles
+?   ?   ??? classification/        # Local evidence, Groq and privacy paths
+?   ?   ??? intelligence/          # Domains, quality and opportunities
+?   ??? requirements.txt
+??? scripts/scan_data_asset.py     # CLI and AssetScan API
+??? evaluation/                    # Evaluators and benchmark reports
+??? docs/                          # Integration guide and synthetic output excerpt
+??? tests/                         # Regression tests
+??? frontend/                      # Reserved for the frontend team
+??? .env.example                   # Empty local configuration template
+```
+
+## Getting Started
+
+Run from the repository root. The examples use PowerShell. On macOS or Linux, activate the virtual environment with `source .venv/bin/activate` and copy the environment template with `cp`.
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
 python -m pip install -r backend/requirements.txt
+```
+
+The optional English NER and MiniLM assets were present during the reported benchmarks. Install them to match the evaluated local evidence setup.
+
+```powershell
+python -m pip install https://github.com/explosion/spacy-models/releases/download/en_core_web_md-3.8.0/en_core_web_md-3.8.0-py3-none-any.whl
 hf download sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 tokenizer.json onnx/model.onnx --revision e8f8c211226b894fcb81acc59f3b34ba3efd5f42 --local-dir .models/minilm
-python -m scripts.run_pipeline --model-path .models/minilm --offline
-python -m scripts.evaluate
+```
+
+Generate a synthetic source, then use the Scanner Core in local mode.
+
+```powershell
+python -m scripts.run_pipeline --without-embeddings --offline --output-dir data/demo
+python -m scripts.scan_data_asset data/demo/synthetic.sqlite data/demo/catalog.json --offline --owner "Demo data steward"
+```
+
+To use the evaluated cloud model, create a key in a Groq Free project without billing, copy the template to `.env`, and fill in `GROQ_API_KEY`. Set Zero Data Retention in the Groq organization. The scanner reads `.env` from the current working directory.
+
+```powershell
+if (-not (Test-Path .env)) { Copy-Item .env.example .env }
+# Open .env locally and set GROQ_API_KEY.
+python -m scripts.scan_data_asset data/demo/synthetic.sqlite data/demo/catalog_groq.json --free-provider groq
 python -m pytest -q
 ```
 
-The pipeline writes the synthetic SQLite source, schema, relationships, profiles,
-classifications, domains, quality report, opportunities and evaluation labels to
-`data/`. Only the separate evaluator
-reads the labels and writes `evaluation.json`. Change the destination with
-`--output-dir` for the pipeline and `--data-dir` for evaluation.
+The default CLI is local. The Groq option selects the fixed GPT?OSS 120B model. Experimental grouping and alternative models require explicit invocation. A fresh setup can skip regression cases that require optional assets. See the [integration guide](docs/SCANNER_CORE_HANDOVER.md) for inputs, model assets, and the Python interface.
 
-Inference runs locally. The full-precision ONNX export of MiniLM embeds schema
-metadata only and caches the taxonomy vectors for each engine instance. Presidio uses local Arabic and
-English tokenization and pattern recognizers. Person-name shape detection is
-heuristic and does not establish identity. Use `--without-embeddings` for an
-explicit Presidio-and-rules run when model weights are unavailable. The export
-records which components ran.
+## Example Output
 
-Full-column counts are exact. Length, format, numeric and detection statistics
-use a reproducible stratified sample distributed over non-null values (500 by default,
-configurable with `--sample-size`). Profiles and classifications export counts,
-masked structural patterns and evidence summaries. Format and checksum failures
-remain evidence of possibly personal data.
-
-Confidence is a heuristic evidence score. Configure review with
-`--review-confidence` and `--review-margin`. Prototype sensitivity levels are
-`internal` for routine data, `confidential` for personal data, `restricted` for
-higher-impact identifiers, bank accounts and salary, and `undetermined` when
-personal status is uncertain. These are prototype labels for human review.
-
-Phase 3 writes `domains.json`, `quality_report.json`, and `opportunities.json`.
-Quality reports use exact null, duplicate and orphan counts where applicable.
-Format and representation checks report sample counts with explicit denominators.
-Duplicate checks apply only to declared uniqueness or primary key constraints.
-Severity uses affected fractions and critical checks. Readiness checks required
-fields, direct declared joins, significant quality issues and review flags.
-Readiness describes technical suitability. Confirm permitted use separately.
-
-The pipeline uses deterministic rules by default. To opt into reasoning, set
-`LLM_BASE_URL` (compatible API root ending in `/v1`), `LLM_API_KEY` and `LLM_MODEL`
-in the process environment, then omit `--offline`. See `.env.example`. The provider
-receives opaque schema identifiers, aggregate counts, taxonomy labels and verified
-links. Its structured proposals must pass local reference and prerequisite
-validation. Request failures or rejected responses leave deterministic results
-in place. The output records which method generated each result.
-
-## Elm Challenge 1 catalog
-
-The catalog is for data stewards and specialists exploring an authorized SQLite asset. Use the read-only scanner to export schema, relationship checks, field types and meanings, sensitivity, domains, quality findings, and potential uses.
-
-```powershell
-python -m scripts.scan_data_asset sample.sqlite data/catalog.json --owner "Data steward" --description "Customer service requests"
-python -m scripts.scan_data_asset sample.sqlite data/catalog_with_dictionary.json --dictionary descriptions.json
-python -m scripts.scan_data_asset sample.sqlite data/catalog_reviewed.json --dictionary descriptions.json --reviews reviews.json
-```
-
-Install the backend dependencies first. The default scanner combines local field-purpose validation with measured relationship evidence. See [default scanner setup and validation](evaluation/DEFAULT_CATALOG.md). MiniLM assets are optional for scanning. The owner and exported asset description are operator-supplied. Omit the owner when it is unknown. The data dictionary accepts descriptive text only and is optional. Use the source's exact table and field names. Descriptions provide evidence and can leave a field unresolved.
+This excerpt comes from an actual offline scan of the bundled synthetic generator. The full catalog includes schema, evidence, domains, quality, opportunities, and review metadata.
 
 ```json
 {
-  "description": "Customer services and finance",
-  "tables": {
-    "requests": {
-      "description": "Service requests recorded by the contact centre",
-      "fields": {"q7": "Payment amount recorded for the completed request"}
-    }
-  }
+  "table_name": "customers",
+  "column_name": "email",
+  "semantic_type": "email_address",
+  "data_domain": "customer",
+  "personal_data": "yes",
+  "personal_linkage": "direct",
+  "confidence": 0.96,
+  "review_required": false,
+  "context_status": "offline"
 }
 ```
 
-The catalog distinguishes direct PII from inferred person-linked data. Linking uses measured matches along declared references to unique keys. Empty joins provide no affirmative linkage. Partial matches name the relationships and require review. Domain explanations distinguish descriptions, semantic evidence, and verified references. The semantic path shows the category and supported subtype. Pending reviews identify fields requiring specialist attention.
+[Sanitized catalog excerpt](docs/examples/scanner-output.json)
 
-For corrections, supply an ordered JSON array. Each entry has `table`, `field`, `reviewer`, `reviewed_at` with a time zone, `reason`, and a `changes` object with any of `semantic_type`, `data_domain`, `personal_data`, and `sensitivity`. Export to a new file and retain the original report and correction file. The reviewed export records the old and new judgments while retaining the detector evidence. Use neutral reviewer identifiers and reasons without personal data. Regulatory decisions and final approval belong to the responsible specialist.
+## Evaluation and Current Limitations
 
-Use synthetic or explicitly authorized sources. The scanner opens SQLite read-only, performs local inference, and exports structural and aggregate evidence. Keep source databases, dictionaries, catalogs and review files in the authorized workspace. For this evaluation, retain synthetic exports for at most 30 days unless a shorter organizational policy applies, then have the workspace owner remove the local copies. Keep any approved long-term review record separately under the owner's retention policy. The scanner does not perform automatic deletion.
+This is a **functional prototype for assisted cataloging**. The 85% targets have not been fully achieved. One sealed 93-field, three-schema run of the production model measured **84.9% exact semantic accuracy**, **85.2% domain membership F1**, **92.3% direct PII precision**, **100% direct PII recall**, and **62.5% person-linked F1**. At **49.5% automated coverage**, **20 of 46** automated decisions were jointly correct.
 
-Run `pytest -q -s tests/test_elm_acceptance.py` for the fixed representative acceptance checks. Exact historical scores and their sealed artifacts remain pinned to the historical revision `431e34a`. Run the old sealed evaluation from that revision if you need to reproduce those hashes.
+Confidence estimates the strength of semantic evidence. It is a heuristic score and has not reliably ranked joint correctness across semantic, domain, and privacy decisions. Results vary by schema. A verified join can show reachability to a person without establishing that the field describes that person. Free-tier quotas can interrupt cloud processing.
 
-### English scanner comparison
+[Published metrics](evaluation/results/scanner_core_metrics.json) ? [Groq recovery](evaluation/GROQ_ARCHITECTURE_VALIDATION.md) ? [Domain annotation](evaluation/DOMAIN_ANNOTATION_GUIDELINES.md) ? [Verifier evaluation](evaluation/GROQ_VERIFIER_VALIDATION.md) ? [Model comparison](evaluation/GROQ_MODEL_COMPARISON.md)
 
-The archived `--engine english` scanner uses English metadata normalization and local content summaries. The previous scanner is available with `--engine enhanced`. The existing MiniLM weights are optional for scanning. Install the pinned assets above before reproducing this comparison. Inferred domains outside the fixed list are marked for review. The catalog exports privacy roles and path evidence while keeping source values local.
+## Development Status
 
-```powershell
-python -m evaluation.english_fixture
-python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/before.json --engine enhanced
-python -m scripts.scan_data_asset data/english_acceptance/english_business.sqlite data/english_acceptance/after.json --engine english
-python -m evaluation.english_score
-```
+| Component | Status | Team boundary |
+| --- | --- | --- |
+| Scanner Core | **Implemented** | Read-only scan, classification, catalog export, and evaluation |
+| Backend | **Planned** | Service integration, authorization, job execution, and managed storage |
+| Frontend | **Planned** | Catalog exploration and specialist review workflow |
 
-The first command creates a new fixture directory and refuses to replace a frozen fixture. Scoring verifies the database and label hashes. The 48-field English fixture tests the supplied Elm workflow with valid and malformed identifier controls, ambiguous metadata, a broken join, and unsupported types. Its results apply to these synthetic scenarios.
-
-### Evidence scanner
-
-The archived `--engine evidence` mode reports semantic verification, business grouping, and privacy separately. It reuses the existing detector and MiniLM candidates. Records can carry provisional type and domain suggestions while verified decisions retain their evidence. It runs locally against a read-only SQLite snapshot. See [public validation](evaluation/PUBLIC_VALIDATION.md) for the frozen comparison.
+[Scanner Core handover](docs/SCANNER_CORE_HANDOVER.md) ? [Upstream notices](licenses/)

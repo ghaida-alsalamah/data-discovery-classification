@@ -8,3 +8,24 @@ __pycache__/
 .pytest_cache/
 data/*
 !data/.gitkeep
+
+# Local credentials, source assets, and scanner exports
+*.pem
+*.key
+*.pfx
+*.p12
+*.sqlite
+*.sqlite3
+*.db
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-wal
+*.sqlite3-shm
+*.db-wal
+*.db-shm
+*.log
+/credentials/
+/private/
+/exports/
+.coverage
+htmlcov/

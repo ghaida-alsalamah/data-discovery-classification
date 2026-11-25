@@ -1,0 +1,43 @@
+{
+  "mode": "contextual",
+  "schema": {
+    "asset": {
+      "name": "synthetic",
+      "description": "Synthetic handover asset",
+      "owner": "Demo data steward",
+      "database_type": "sqlite",
+      "access_scope": "read_only",
+      "connection_status": "connected"
+    }
+  },
+  "classifications": [
+    {
+      "table_name": "customers",
+      "column_name": "email",
+      "semantic_type": "email_address",
+      "semantic_category": "email_address",
+      "semantic_path": [
+        "email_address"
+      ],
+      "field_meaning": "electronic mail address for contacting someone",
+      "data_domain": "customer",
+      "personal_data": "yes",
+      "personal_linkage": "direct",
+      "sensitivity": "confidential",
+      "confidence": 0.96,
+      "review_required": false,
+      "review_dimensions": [],
+      "context_status": "offline",
+      "personal_linkage_evidence": {
+        "method": "direct_identifier",
+        "relationship_ids": []
+      }
+    }
+  ],
+  "context_runtime": "offline",
+  "context_summary": {
+    "missing_context_fields": 0,
+    "entity_model_loaded": true,
+    "additional_person_anchors": 0
+  }
+}
